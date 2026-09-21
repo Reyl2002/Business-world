@@ -87,6 +87,51 @@ let startRevenue = revenue;
 let airportUnlocked = false;
 let timeMode = 'AUTO';
 let weatherMode = 'CLEAR';
+const GRID_TILE = 13;
+
+// True city-builder floor grid. Squares are drawn only where their center is
+// inside an island, so the grid follows the island instead of covering water.
+function pointInPolygon(x,z,points){
+  let inside=false;
+  for(let i=0,j=points.length-1;i<points.length;j=i++){
+    const xi=points[i][0], zi=points[i][1];
+    const xj=points[j][0], zj=points[j][1];
+    const hit=((zi>z)!==(zj>z)) && (x < (xj-xi)*(z-zi)/(zj-zi)+xi);
+    if(hit) inside=!inside;
+  }
+  return inside;
+}
+
+function createIslandGrid(points,{color=0x5f9f4d,opacity=.55,y=.16}={}){
+  const xs=points.map(p=>p[0]), zs=points.map(p=>p[1]);
+  const minX=Math.floor(Math.min(...xs)/GRID_TILE)*GRID_TILE;
+  const maxX=Math.ceil(Math.max(...xs)/GRID_TILE)*GRID_TILE;
+  const minZ=Math.floor(Math.min(...zs)/GRID_TILE)*GRID_TILE;
+  const maxZ=Math.ceil(Math.max(...zs)/GRID_TILE)*GRID_TILE;
+  const positions=[];
+
+  for(let x=minX;x<maxX;x+=GRID_TILE){
+    for(let z=minZ;z<maxZ;z+=GRID_TILE){
+      const cx=x+GRID_TILE/2, cz=z+GRID_TILE/2;
+      if(!pointInPolygon(cx,cz,points)) continue;
+      // four sides of the tile; duplicates are intentional so every square is crisp
+      positions.push(
+        x,y,z, x+GRID_TILE,y,z,
+        x+GRID_TILE,y,z, x+GRID_TILE,y,z+GRID_TILE,
+        x+GRID_TILE,y,z+GRID_TILE, x,y,z+GRID_TILE,
+        x,y,z+GRID_TILE, x,y,z
+      );
+    }
+  }
+
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  const mat=new THREE.LineBasicMaterial({color,transparent:true,opacity,depthWrite:false});
+  const lines=new THREE.LineSegments(geo,mat);
+  scene.add(lines);
+  return {lines,material:mat};
+}
+
 
 function island(points, material, depth=16){
   const shape = new THREE.Shape();
@@ -127,6 +172,8 @@ const airportPoints = [[154,-98],[186,-112],[226,-106],[263,-84],[278,-48],[273,
 
 island(mainPoints, mats.grass, 17);
 const airportIsland = island(airportPoints, mats.locked, 18);
+const mainFloorGrid = createIslandGrid(mainPoints,{color:0x4f9445,opacity:.58,y:.17});
+const airportFloorGrid = createIslandGrid(airportPoints,{color:0x666b70,opacity:.62,y:.17});
 
 function road(ax,az,bx,bz,width=10,bridge=false){
   const dx=bx-ax, dz=bz-az, len=Math.hypot(dx,dz), angle=Math.atan2(dz,dx);
@@ -187,39 +234,43 @@ function spriteLabel(text,bg='#143e62'){
 const lotMaterial = new THREE.MeshStandardMaterial({color:0x8fd46e,roughness:1});
 const lotBorderMaterial = new THREE.MeshStandardMaterial({color:0xe9e5d8,roughness:1});
 
-function createLotBase(x,z,size=34){
+function createLotBase(x,z,cols=3,rows=cols){
+  const sizeX=cols*GRID_TILE;
+  const sizeZ=rows*GRID_TILE;
   const lot = new THREE.Group();
   lot.position.set(x,.11,z);
 
-  const tile = new THREE.Mesh(new THREE.BoxGeometry(size,.18,size),lotMaterial);
+  const tile = new THREE.Mesh(
+    new THREE.BoxGeometry(sizeX-.5,.18,sizeZ-.5),
+    lotMaterial
+  );
   tile.receiveShadow = true;
   lot.add(tile);
 
-  const edge=.55, y=.18;
-  const top=new THREE.Mesh(new THREE.BoxGeometry(size+.7,.18,edge),lotBorderMaterial);
-  top.position.set(0,y,-size/2);
-  const bottom=top.clone(); bottom.position.z=size/2;
-  const left=new THREE.Mesh(new THREE.BoxGeometry(edge,.18,size+.7),lotBorderMaterial);
-  left.position.set(-size/2,y,0);
-  const right=left.clone(); right.position.x=size/2;
-  lot.add(top,bottom,left,right);
-
-  // subtle four-corner markers make the square placement system readable
-  for(const [cx,cz] of [[-1,-1],[1,-1],[-1,1],[1,1]]){
-    const marker=new THREE.Mesh(new THREE.BoxGeometry(1.15,.24,1.15),lotBorderMaterial);
-    marker.position.set(cx*(size/2-1),.24,cz*(size/2-1));
-    lot.add(marker);
+  // Draw the footprint as actual 1x1 build squares.
+  const lineMat=lotBorderMaterial;
+  for(let i=0;i<=cols;i++){
+    const lx=-sizeX/2+i*GRID_TILE;
+    const line=new THREE.Mesh(new THREE.BoxGeometry(.38,.22,sizeZ),lineMat);
+    line.position.set(lx,.2,0);
+    lot.add(line);
+  }
+  for(let j=0;j<=rows;j++){
+    const lz=-sizeZ/2+j*GRID_TILE;
+    const line=new THREE.Mesh(new THREE.BoxGeometry(sizeX,.22,.38),lineMat);
+    line.position.set(0,.2,lz);
+    lot.add(line);
   }
 
   scene.add(lot);
   return lot;
 }
 
-function building({name,x,z,w=22,d=18,h=22,color=0x7fadd3,accent=0x315c7b,description='',lotSize=34}) {
-  createLotBase(x,z,lotSize);
+function building({name,x,z,w=22,d=18,h=22,color=0x7fadd3,accent=0x315c7b,description='',footprint=3,footprintZ=footprint}) {
+  createLotBase(x,z,footprint,footprintZ);
   const g=new THREE.Group();
   g.position.set(x,.25,z);
-  g.userData={name,description,gridLot:true,lotSize};
+  g.userData={name,description,gridLot:true,footprint,footprintZ};
 
   const pad=new THREE.Mesh(new THREE.BoxGeometry(w+3,.55,d+3),mats.sidewalk);
   pad.position.y=.3; g.add(pad);
@@ -253,12 +304,15 @@ function building({name,x,z,w=22,d=18,h=22,color=0x7fadd3,accent=0x315c7b,descri
 }
 
 function createThinkHub(x,z){
-  createLotBase(x,z,40);
+  createLotBase(x,z,5,5);
   const g=new THREE.Group();
   g.position.set(x,.25,z);
   g.userData={
     name:'Think Hub',
-    description:'The city’s idea and brainstorming center, where agents develop strategy, automation and new business concepts.'
+    description:'The city’s idea and brainstorming center, where agents develop strategy, automation and new business concepts.',
+    gridLot:true,
+    footprint:5,
+    footprintZ:5
   };
 
   const stone=new THREE.MeshStandardMaterial({color:0xe9eceb,roughness:.7});
@@ -358,17 +412,17 @@ function createThinkHub(x,z){
 }
 
 const destinations = [
-  building({name:'Marketing Studio',x:-105,z:-48,w:25,d:20,h:24,color:0xdb7168,accent:0x813856,description:'Marketing content, social campaigns and brand growth.'}),
-  building({name:'Accounting Hub',x:-61,z:-48,w:24,d:20,h:28,color:0x609ed5,accent:0x2d5d93,description:'Invoices, bookkeeping, revenue, profit and forecasting.'}),
-  building({name:'BW Headquarters',x:-4,z:-96,w:28,d:24,h:43,color:0x4f91cb,accent:0x2f5878,description:'Central headquarters for Business World operations.'}),
+  building({name:'Marketing Studio',footprint:3,x:-105,z:-48,w:25,d:20,h:24,color:0xdb7168,accent:0x813856,description:'Marketing content, social campaigns and brand growth.'}),
+  building({name:'Accounting Hub',footprint:3,x:-61,z:-48,w:24,d:20,h:28,color:0x609ed5,accent:0x2d5d93,description:'Invoices, bookkeeping, revenue, profit and forecasting.'}),
+  building({name:'BW Headquarters',footprint:4,x:-4,z:-96,w:28,d:24,h:43,color:0x4f91cb,accent:0x2f5878,description:'Central headquarters for Business World operations.'}),
   createThinkHub(58,-48),
-  building({name:'Apartments',x:-104,z:51,w:24,d:21,h:30,color:0xdf9974,accent:0x865a47,description:'Home base for workers and residents.'}),
-  building({name:'Cafe',x:-61,z:51,w:25,d:21,h:15,color:0xd99661,accent:0x764b39,description:'Social space where agents can idle, meet and recharge.'}),
-  building({name:'Market',x:0,z:51,w:25,d:21,h:16,color:0xe5ad65,accent:0x287b5f,description:'Supplies and local commerce.'}),
-  building({name:'School',x:108,z:53,w:28,d:22,h:20,color:0xd98262,accent:0xa64f3b,description:'Community learning and worker development.'}),
+  building({name:'Apartments',footprint:3,x:-104,z:51,w:24,d:21,h:30,color:0xdf9974,accent:0x865a47,description:'Home base for workers and residents.'}),
+  building({name:'Cafe',footprint:2,x:-61,z:51,w:25,d:21,h:15,color:0xd99661,accent:0x764b39,description:'Social space where agents can idle, meet and recharge.'}),
+  building({name:'Market',footprint:2,x:0,z:51,w:25,d:21,h:16,color:0xe5ad65,accent:0x287b5f,description:'Supplies and local commerce.'}),
+  building({name:'School',footprint:3,x:108,z:53,w:28,d:22,h:20,color:0xd98262,accent:0xa64f3b,description:'Community learning and worker development.'}),
 ];
 
-const airportBuilding = building({name:'Airport',x:245,z:-27,w:26,d:19,h:14,color:0x93999d,accent:0x62676b,description:'Locked expansion island. Unlocks when total revenue reaches $10,000.'});
+const airportBuilding = building({name:'Airport',footprint:4,x:245,z:-27,w:26,d:19,h:14,color:0x93999d,accent:0x62676b,description:'Locked expansion island. Unlocks when total revenue reaches $10,000.'});
 airportBuilding.traverse(o=>{ if(o.material && o.material.color) o.material.color.multiplyScalar(.72); });
 
 const runway=new THREE.Mesh(new THREE.BoxGeometry(76,.45,17),mats.road);
@@ -394,6 +448,7 @@ for(let x=-128;x<=125;x+=19){
   }
 }
 
+createLotBase(0,0,6,6);
 const plaza=new THREE.Mesh(new THREE.CylinderGeometry(31,33,1,48),new THREE.MeshStandardMaterial({color:0xd8d0bf,roughness:1}));
 plaza.position.y=.5; scene.add(plaza);
 const park=new THREE.Mesh(new THREE.CylinderGeometry(22,23,.45,48),new THREE.MeshStandardMaterial({color:0x79bd62,roughness:1}));
@@ -489,6 +544,8 @@ function unlockAirport(){
   if(airportUnlocked) return;
   airportUnlocked=true;
   airportIsland.top.material=mats.grass2;
+  airportFloorGrid.material.color.setHex(0x4f9445);
+  airportFloorGrid.material.opacity=.58;
   bridge.visible=true;
   bridge.scale.x=.02;
   islandStatus.textContent='Airport Island unlocked ✓';
