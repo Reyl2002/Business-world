@@ -134,34 +134,56 @@ function createIslandGrid(points,{color=0x5f9f4d,opacity=.55,y=.16}={}){
 
 
 function island(points, material, depth=16){
-  const shape = new THREE.Shape();
-  points.forEach(([x,z],i)=> i ? shape.lineTo(x,z) : shape.moveTo(x,z));
-  shape.closePath();
+  const group=new THREE.Group();
+  const topTiles=[];
+  const xs=points.map(p=>p[0]), zs=points.map(p=>p[1]);
+  const minX=Math.floor(Math.min(...xs)/GRID_TILE)*GRID_TILE;
+  const maxX=Math.ceil(Math.max(...xs)/GRID_TILE)*GRID_TILE;
+  const minZ=Math.floor(Math.min(...zs)/GRID_TILE)*GRID_TILE;
+  const maxZ=Math.ceil(Math.max(...zs)/GRID_TILE)*GRID_TILE;
 
-  const top = new THREE.Mesh(new THREE.ShapeGeometry(shape), material);
-  top.rotation.x = -Math.PI/2;
-  top.position.y = .04;
-  top.receiveShadow = true;
-  scene.add(top);
+  const seamMaterial=new THREE.MeshStandardMaterial({color:0x5f934d,roughness:1});
+  const cliffMaterials=[
+    mats.cliff,mats.cliff,seamMaterial,mats.cliff,mats.cliff,mats.cliff
+  ];
 
-  const wallPos = [];
-  const indices = [];
-  points.forEach((a,i)=>{
-    const b = points[(i+1)%points.length];
-    const n = i*4;
-    wallPos.push(a[0],0,a[1], b[0],0,b[1], b[0],-depth,b[1], a[0],-depth,a[1]);
-    indices.push(n,n+1,n+2,n,n+2,n+3);
-  });
-  const wallGeo = new THREE.BufferGeometry();
-  wallGeo.setAttribute('position', new THREE.Float32BufferAttribute(wallPos,3));
-  wallGeo.setIndex(indices);
-  wallGeo.computeVertexNormals();
-  const wall = new THREE.Mesh(wallGeo, mats.cliff);
-  wall.castShadow = true;
-  wall.receiveShadow = true;
-  scene.add(wall);
+  for(let x=minX;x<maxX;x+=GRID_TILE){
+    for(let z=minZ;z<maxZ;z+=GRID_TILE){
+      const cx=x+GRID_TILE/2;
+      const cz=z+GRID_TILE/2;
+      if(!pointInPolygon(cx,cz,points)) continue;
 
-  return {top, wall};
+      // The island itself is made from complete square blocks.
+      const block=new THREE.Mesh(
+        new THREE.BoxGeometry(GRID_TILE,depth,GRID_TILE),
+        cliffMaterials
+      );
+      block.position.set(cx,-depth/2,cz);
+      block.receiveShadow=true;
+      block.castShadow=true;
+      group.add(block);
+
+      // Slightly inset grass/locked cap creates the visible tile seams,
+      // while every land cell remains a complete square.
+      const cap=new THREE.Mesh(
+        new THREE.BoxGeometry(GRID_TILE-.34,.20,GRID_TILE-.34),
+        material
+      );
+      cap.position.set(cx,.10,cz);
+      cap.receiveShadow=true;
+      group.add(cap);
+      topTiles.push(cap);
+    }
+  }
+
+  scene.add(group);
+  return {
+    group,
+    topTiles,
+    setTopMaterial(nextMaterial){
+      topTiles.forEach(tile=>tile.material=nextMaterial);
+    }
+  };
 }
 
 const mainPoints = [
@@ -172,8 +194,7 @@ const airportPoints = [[154,-98],[186,-112],[226,-106],[263,-84],[278,-48],[273,
 
 island(mainPoints, mats.grass, 17);
 const airportIsland = island(airportPoints, mats.locked, 18);
-const mainFloorGrid = createIslandGrid(mainPoints,{color:0x4f9445,opacity:.58,y:.17});
-const airportFloorGrid = createIslandGrid(airportPoints,{color:0x666b70,opacity:.62,y:.17});
+// No separate line-grid overlay: each complete land block is one visible tile.
 
 function road(ax,az,bx,bz,width=10,bridge=false){
   const dx=bx-ax, dz=bz-az, len=Math.hypot(dx,dz), angle=Math.atan2(dz,dx);
@@ -543,9 +564,7 @@ function movePolyline(item,dt){
 function unlockAirport(){
   if(airportUnlocked) return;
   airportUnlocked=true;
-  airportIsland.top.material=mats.grass2;
-  airportFloorGrid.material.color.setHex(0x4f9445);
-  airportFloorGrid.material.opacity=.58;
+  airportIsland.setTopMaterial(mats.grass2);
   bridge.visible=true;
   bridge.scale.x=.02;
   islandStatus.textContent='Airport Island unlocked ✓';
