@@ -464,6 +464,68 @@ function spriteLabel(text,bg='#143e62'){
   return s;
 }
 
+function createRevenueBubble(title,target,x,y,z){
+  const canvas=document.createElement('canvas');
+  canvas.width=640;
+  canvas.height=240;
+  const ctx=canvas.getContext('2d');
+  const texture=new THREE.CanvasTexture(canvas);
+  texture.colorSpace=THREE.SRGBColorSpace;
+  const material=new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false});
+  const sprite=new THREE.Sprite(material);
+  sprite.position.set(x,y,z);
+  sprite.scale.set(48,18,1);
+  sprite.renderOrder=1000;
+  scene.add(sprite);
+  return {ctx,texture,sprite,title,target,lastValue:-1};
+}
+
+function drawRevenueBubble(bubble,currentRevenue){
+  if(!bubble || !bubble.sprite.visible) return;
+  const value=Math.floor(currentRevenue);
+  if(value===bubble.lastValue) return;
+  bubble.lastValue=value;
+  const ctx=bubble.ctx;
+  const progress=THREE.MathUtils.clamp(currentRevenue/bubble.target,0,1);
+
+  ctx.clearRect(0,0,640,240);
+  ctx.fillStyle='rgba(20,38,56,.96)';
+  ctx.beginPath(); ctx.roundRect(18,14,604,190,32); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.22)'; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.roundRect(18,14,604,190,32); ctx.stroke();
+
+  ctx.fillStyle='#f4bf48'; ctx.beginPath(); ctx.arc(66,70,30,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#233244'; ctx.lineWidth=7;
+  ctx.beginPath(); ctx.arc(66,63,12,Math.PI,0); ctx.stroke();
+  ctx.fillStyle='#233244'; ctx.fillRect(54,61,24,24);
+
+  ctx.textAlign='left'; ctx.fillStyle='#fff'; ctx.font='900 31px system-ui';
+  ctx.fillText(bubble.title,110,58);
+  ctx.fillStyle='#d9e6f1'; ctx.font='700 24px system-ui';
+  ctx.fillText('Requires $'+Math.round(bubble.target/1000)+'k Revenue',110,92);
+
+  ctx.textAlign='right'; ctx.fillStyle='#b9d1e4'; ctx.font='700 20px system-ui';
+  ctx.fillText('$'+value.toLocaleString()+' / $'+bubble.target.toLocaleString(),570,122);
+
+  const bx=52,by=142,bw=536,bh=30;
+  ctx.fillStyle='rgba(255,255,255,.14)';
+  ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,15); ctx.fill();
+
+  const fillW=Math.max(30,bw*progress);
+  const grad=ctx.createLinearGradient(bx,by,bx+bw,by);
+  grad.addColorStop(0,'#43c47b'); grad.addColorStop(1,'#d8e95f');
+  ctx.fillStyle=grad; ctx.beginPath(); ctx.roundRect(bx,by,fillW,bh,15); ctx.fill();
+
+  ctx.textAlign='center'; ctx.fillStyle='#fff'; ctx.font='900 18px system-ui';
+  ctx.fillText(Math.floor(progress*100)+'%',bx+bw/2,164);
+
+  ctx.fillStyle='rgba(20,38,56,.96)';
+  ctx.beginPath(); ctx.moveTo(278,204); ctx.lineTo(362,204); ctx.lineTo(320,236); ctx.closePath(); ctx.fill();
+
+  bubble.texture.needsUpdate=true;
+}
+
+
 
 // $25K EXPANSION BRIDGES
 // Two full road bridges connect the street grids, but they look visibly unfinished
@@ -1412,10 +1474,11 @@ for(const sx of [226,246,266,286]){
 const transitStation=createTransitStation(72,-322);
 setTransitStationLockedAppearance(transitStation,true);
 
-const transitLockLabel=spriteLabel('LOCKED · $25,000 REVENUE','#4d5358');
-transitLockLabel.position.set(72,18,-388);
-transitLockLabel.scale.multiplyScalar(.9);
-scene.add(transitLockLabel);
+const airportRevenueBubble=createRevenueBubble('AIRPORT ISLAND',10000,258,56,-24);
+drawRevenueBubble(airportRevenueBubble,revenue);
+
+const transitRevenueBubble=createRevenueBubble('TRANSIT DISTRICT',25000,72,62,-322);
+drawRevenueBubble(transitRevenueBubble,revenue);
 
 // Major expansion landscaping: a formal arrival park and future-development pads.
 const transitDistrictGroup=new THREE.Group();
@@ -1808,6 +1871,7 @@ function unlockAirport(){
   if(airportUnlocked) return;
   airportUnlocked=true;
   airportIsland.setTopMaterial(mats.grass2);
+  airportRevenueBubble.sprite.visible=false;
   bridge.visible=true;
   bridge.scale.x=.02;
   islandStatus.textContent='Next expansion: Train District · $25,000 revenue';
@@ -1825,20 +1889,27 @@ function unlockTransitDistrict(){
   if(transitUnlocked) return;
   transitUnlocked=true;
   transitIsland.setTopMaterial(mats.grass2);
+  transitRevenueBubble.sprite.visible=false;
   setTransitStationLockedAppearance(transitStation,false);
   transitPark.material.color.setHex(0x6cab62);
   transitLockedPadMat.color.setHex(0x98c879);
   transitStation.userData.description='Underground Central Station is open. Trains now enter and exit through the underground tunnels automatically.';
   transitStation.userData.train.visible=true;
-  transitLockLabel.visible=false;
   unlockTransitBridges();
   islandStatus.textContent='Train District unlocked ✓';
   islandStatus.classList.add('unlocked');
 }
 
+let revenueBubbleTimer=0;
 function updateMetrics(dt){
   revenue += dt*19;
   profit += dt*7.2;
+  revenueBubbleTimer+=dt;
+  if(revenueBubbleTimer>=.2){
+    revenueBubbleTimer=0;
+    if(!airportUnlocked) drawRevenueBubble(airportRevenueBubble,revenue);
+    if(!transitUnlocked) drawRevenueBubble(transitRevenueBubble,revenue);
+  }
   const growth=((revenue-startRevenue)/startRevenue)*100;
   revenueEl.textContent='$'+Math.floor(revenue).toLocaleString();
   profitEl.textContent='$'+Math.floor(profit).toLocaleString();
