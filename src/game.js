@@ -207,11 +207,115 @@ function building({name,x,z,w=22,d=18,h=22,color=0x7fadd3,accent=0x315c7b,descri
   return g;
 }
 
+function createThinkHub(x,z){
+  const g=new THREE.Group();
+  g.position.set(x,.25,z);
+  g.userData={
+    name:'Think Hub',
+    description:'The city’s idea and brainstorming center, where agents develop strategy, automation and new business concepts.'
+  };
+
+  const stone=new THREE.MeshStandardMaterial({color:0xe9eceb,roughness:.7});
+  const white=new THREE.MeshStandardMaterial({color:0xf8f7f3,roughness:.62});
+  const wood=new THREE.MeshStandardMaterial({color:0x9b6747,roughness:.72});
+  const dark=new THREE.MeshStandardMaterial({color:0x23323b,roughness:.55,metalness:.08});
+  const glass=new THREE.MeshPhysicalMaterial({color:0x75cde8,roughness:.18,transparent:true,opacity:.78,transmission:.12,clearcoat:.35});
+  const gold=new THREE.MeshStandardMaterial({color:0xe9b83f,roughness:.35,metalness:.25,emissive:0x8d5b00,emissiveIntensity:.22});
+  const glow=new THREE.MeshStandardMaterial({color:0xffe06a,emissive:0xffb000,emissiveIntensity:2.1,roughness:.28});
+
+  const pad=new THREE.Mesh(new THREE.BoxGeometry(34,.7,29),stone);
+  pad.position.y=.35; pad.receiveShadow=true; g.add(pad);
+
+  const leftWing=new THREE.Mesh(new THREE.BoxGeometry(10,18,20),white);
+  leftWing.position.set(-11,9.6,0); leftWing.castShadow=true; g.add(leftWing);
+
+  const rightWing=new THREE.Mesh(new THREE.BoxGeometry(10,18,20),white);
+  rightWing.position.set(11,9.6,0); rightWing.castShadow=true; g.add(rightWing);
+
+  const woodPanel=new THREE.Mesh(new THREE.BoxGeometry(7,14,.5),wood);
+  woodPanel.position.set(-11,9.5,10.25); g.add(woodPanel);
+
+  const atrium=new THREE.Mesh(new THREE.CylinderGeometry(8.6,8.6,20,28,1,false,Math.PI*.5,Math.PI),glass);
+  atrium.rotation.y=Math.PI/2;
+  atrium.position.set(0,10.5,8.7);
+  atrium.castShadow=true; g.add(atrium);
+
+  const atriumCore=new THREE.Mesh(new THREE.CylinderGeometry(8.05,8.05,19.2,28),dark);
+  atriumCore.material.transparent=true; atriumCore.material.opacity=.12;
+  atriumCore.position.set(0,10.4,6.8); g.add(atriumCore);
+
+  const roof=new THREE.Mesh(new THREE.CylinderGeometry(13.4,13.4,1.1,40),dark);
+  roof.position.y=19.7; g.add(roof);
+
+  const goldRing=new THREE.Mesh(new THREE.TorusGeometry(9.4,.7,14,48),gold);
+  goldRing.rotation.x=Math.PI/2;
+  goldRing.position.y=20.6; g.add(goldRing);
+
+  const terraceL=new THREE.Mesh(new THREE.BoxGeometry(9,.55,7),stone);
+  terraceL.position.set(-10.5,18.8,-5); g.add(terraceL);
+  const terraceR=terraceL.clone(); terraceR.position.x=10.5; g.add(terraceR);
+
+  for(const [tx,tz] of [[-13,-7],[-9,-8],[10,-8],[14,-6],[-14,7],[14,7]]){
+    const pot=new THREE.Mesh(new THREE.BoxGeometry(1.8,1.3,1.8),stone);
+    pot.position.set(tx,19.4,tz); g.add(pot);
+    const bush=new THREE.Mesh(new THREE.IcosahedronGeometry(1.5,1),new THREE.MeshStandardMaterial({color:0x4a9a4d,roughness:1}));
+    bush.position.set(tx,21,tz); bush.castShadow=true; g.add(bush);
+  }
+
+  const bulbBase=new THREE.Mesh(new THREE.CylinderGeometry(4.2,5,4.5,24),gold);
+  bulbBase.position.y=23.3; bulbBase.castShadow=true; g.add(bulbBase);
+
+  const bulbGlass=new THREE.Mesh(
+    new THREE.SphereGeometry(7.3,32,22),
+    new THREE.MeshPhysicalMaterial({color:0xfff2b5,transparent:true,opacity:.32,roughness:.08,transmission:.55,clearcoat:.5})
+  );
+  bulbGlass.scale.y=1.12;
+  bulbGlass.position.y=31.2;
+  g.add(bulbGlass);
+
+  const filamentStem=new THREE.Mesh(new THREE.CylinderGeometry(.32,.32,6.5,12),glow);
+  filamentStem.position.y=28.8; g.add(filamentStem);
+
+  const loop=new THREE.Mesh(new THREE.TorusGeometry(2.7,.34,12,32,Math.PI*1.45),glow);
+  loop.rotation.z=Math.PI*.78;
+  loop.position.set(0,31.6,.3); g.add(loop);
+
+  const bulbLight=new THREE.PointLight(0xffc93f,4.2,85,2);
+  bulbLight.position.set(0,31,0); g.add(bulbLight);
+
+  const canopy=new THREE.Mesh(new THREE.BoxGeometry(10,1.0,4.8),gold);
+  canopy.position.set(0,8.5,12); g.add(canopy);
+
+  const entrance=new THREE.Mesh(new THREE.BoxGeometry(7.2,7.2,.45),glass);
+  entrance.position.set(0,4.6,14.3); g.add(entrance);
+
+  const sign=spriteLabel('THINK HUB','#1c2b34');
+  sign.position.set(0,11.2,13.4);
+  sign.scale.multiplyScalar(.82);
+  g.add(sign);
+
+  const ideaPlaque=spriteLabel('IDEAS  •  PEOPLE  •  PROGRESS','#6f503d');
+  ideaPlaque.position.set(-11,13,10.7);
+  ideaPlaque.scale.multiplyScalar(.48);
+  g.add(ideaPlaque);
+
+  for(const sx of [-14,-10,-6,6,10,14]){
+    const lampPost=new THREE.Mesh(new THREE.CylinderGeometry(.12,.16,3.3,8),dark);
+    lampPost.position.set(sx,1.9,14.2); g.add(lampPost);
+    const lamp=new THREE.Mesh(new THREE.SphereGeometry(.35,10,8),glow);
+    lamp.position.set(sx,3.8,14.2); g.add(lamp);
+  }
+
+  scene.add(g);
+  clickable.push(g);
+  return g;
+}
+
 const destinations = [
   building({name:'Marketing Studio',x:-105,z:-48,w:25,d:20,h:24,color:0xdb7168,accent:0x813856,description:'Marketing content, social campaigns and brand growth.'}),
   building({name:'Accounting Hub',x:-61,z:-48,w:24,d:20,h:28,color:0x609ed5,accent:0x2d5d93,description:'Invoices, bookkeeping, revenue, profit and forecasting.'}),
   building({name:'BW Headquarters',x:-4,z:-96,w:28,d:24,h:43,color:0x4f91cb,accent:0x2f5878,description:'Central headquarters for Business World operations.'}),
-  building({name:'Think Tank',x:58,z:-48,w:27,d:23,h:25,color:0xc69a6a,accent:0x355a72,description:'Agents brainstorm strategy, automation and new business ideas.'}),
+  createThinkHub(58,-48),
   building({name:'Apartments',x:-104,z:51,w:24,d:21,h:30,color:0xdf9974,accent:0x865a47,description:'Home base for workers and residents.'}),
   building({name:'Cafe',x:-31,z:56,w:25,d:21,h:15,color:0xd99661,accent:0x764b39,description:'Social space where agents can idle, meet and recharge.'}),
   building({name:'Market',x:25,z:57,w:25,d:21,h:16,color:0xe5ad65,accent:0x287b5f,description:'Supplies and local commerce.'}),
