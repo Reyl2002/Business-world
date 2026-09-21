@@ -466,15 +466,20 @@ function spriteLabel(text,bg='#143e62'){
 
 
 // $25K EXPANSION BRIDGES
-// Two road-aligned bridges are visibly broken while the Transit District is locked.
-// At $25k revenue, the broken pieces disappear and the completed bridges activate.
+// Two full road bridges connect the street grids, but they look visibly unfinished
+// and stay blocked until the Transit District unlocks at $25k revenue.
 const transitBrokenBridgeGroups=[];
 const transitCompleteBridges=[];
 const transitBridgeLabels=[];
 
 const bridgeConcreteMat=new THREE.MeshStandardMaterial({color:0x8b9398,roughness:.82});
+const bridgeConcreteDark=new THREE.MeshStandardMaterial({color:0x667078,roughness:.9});
 const bridgeBarrierRed=new THREE.MeshStandardMaterial({color:0xd84536,roughness:.55});
 const bridgeBarrierWhite=new THREE.MeshStandardMaterial({color:0xf7f3e9,roughness:.55});
+const bridgeSteelMat=new THREE.MeshStandardMaterial({color:0x56636d,roughness:.38,metalness:.42});
+const bridgeYellowMat=new THREE.MeshStandardMaterial({color:0xf0b529,roughness:.48});
+const bridgeTireMat=new THREE.MeshStandardMaterial({color:0x202327,roughness:.9});
+const bridgeGlassMat=new THREE.MeshStandardMaterial({color:0x6fb6d3,roughness:.22,metalness:.06});
 const bridgeWarningMat=new THREE.MeshStandardMaterial({
   color:0xffa31a,emissive:0xff6a00,emissiveIntensity:1.8,roughness:.3
 });
@@ -510,50 +515,186 @@ function addBridgeBarricade(group,x,z,rotation=0){
   group.add(barGroup);
 }
 
-function makeBrokenTransitBridge({x,cityZ,transitZ,labelZ}){
+function addConstructionCone(group,x,z){
+  const cone=new THREE.Mesh(
+    new THREE.ConeGeometry(.55,1.5,10),
+    new THREE.MeshStandardMaterial({color:0xf57c20,roughness:.6})
+  );
+  cone.position.set(x,3.0,z);
+  group.add(cone);
+  const base=new THREE.Mesh(new THREE.BoxGeometry(1.15,.16,1.15),bridgeTireMat);
+  base.position.set(x,2.28,z);
+  group.add(base);
+}
+
+function addBridgeTractor(group,x,z,rotation=0){
+  const t=new THREE.Group();
+  t.position.set(x,3.2,z);
+  t.rotation.y=rotation;
+
+  // Heavy yellow tracked construction tractor / excavator.
+  const chassis=new THREE.Mesh(new THREE.BoxGeometry(5.8,1.4,3.4),bridgeYellowMat);
+  chassis.position.y=1.35;
+  chassis.castShadow=true;
+  t.add(chassis);
+
+  for(const side of [-1,1]){
+    const track=new THREE.Mesh(new THREE.BoxGeometry(5.4,1.05,.8),bridgeTireMat);
+    track.position.set(0,.55,side*1.75);
+    t.add(track);
+
+    for(const wx of [-1.8,0,1.8]){
+      const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.58,.58,.9,14),bridgeConcreteDark);
+      wheel.rotation.x=Math.PI/2;
+      wheel.position.set(wx,.55,side*1.76);
+      t.add(wheel);
+    }
+  }
+
+  const cab=new THREE.Mesh(new THREE.BoxGeometry(2.8,2.7,2.7),bridgeYellowMat);
+  cab.position.set(-.8,3.15,0);
+  cab.castShadow=true;
+  t.add(cab);
+
+  const windshield=new THREE.Mesh(new THREE.BoxGeometry(.12,1.55,1.95),bridgeGlassMat);
+  windshield.position.set(.66,3.4,0);
+  t.add(windshield);
+
+  const boom=new THREE.Mesh(new THREE.BoxGeometry(5.8,.65,.7),bridgeYellowMat);
+  boom.position.set(2.6,3.55,0);
+  boom.rotation.z=-.33;
+  t.add(boom);
+
+  const arm=new THREE.Mesh(new THREE.BoxGeometry(3.3,.58,.62),bridgeYellowMat);
+  arm.position.set(5.0,2.45,0);
+  arm.rotation.z=.62;
+  t.add(arm);
+
+  const bucket=new THREE.Mesh(new THREE.BoxGeometry(1.5,.8,2.0),bridgeConcreteDark);
+  bucket.position.set(6.05,1.25,0);
+  bucket.rotation.z=.25;
+  t.add(bucket);
+
+  group.add(t);
+  return t;
+}
+
+function addBridgePillars(group,x,aZ,bZ){
+  // Pillars descend from the bridge deck all the way to the ocean floor.
+  const low=Math.min(aZ,bZ);
+  const high=Math.max(aZ,bZ);
+  const span=high-low;
+  const count=Math.max(3,Math.floor(span/15));
+
+  for(let i=1;i<count;i++){
+    const z=low+(span*i/count);
+    const pierHeight=18.2;
+    const pier=new THREE.Mesh(
+      new THREE.BoxGeometry(8.5,pierHeight,4.8),
+      bridgeConcreteMat
+    );
+    pier.position.set(x,-6.7,z);
+    pier.castShadow=true;
+    pier.receiveShadow=true;
+    group.add(pier);
+
+    const footing=new THREE.Mesh(
+      new THREE.BoxGeometry(11.2,2.2,7.2),
+      bridgeConcreteDark
+    );
+    footing.position.set(x,-14.7,z);
+    group.add(footing);
+
+    const cap=new THREE.Mesh(
+      new THREE.BoxGeometry(11.5,1.1,6.2),
+      bridgeConcreteDark
+    );
+    cap.position.set(x,1.45,z);
+    group.add(cap);
+  }
+}
+
+function addUnfinishedBridgeDetails(group,x,cityZ,transitZ,variant=0){
+  const mid=(cityZ+transitZ)/2;
+  const length=Math.abs(cityZ-transitZ);
+
+  // Exposed side steel / partial railings.
+  for(const side of [-1,1]){
+    const rail=new THREE.Mesh(
+      new THREE.BoxGeometry(.45,1.2,length*.72),
+      bridgeSteelMat
+    );
+    rail.position.set(x+side*5.0,3.15,mid+(variant?2:-2));
+    group.add(rail);
+  }
+
+  // Concrete slab stacks and exposed beams make the deck look under construction.
+  for(const [dx,dz] of [[-3.5,-6],[3.2,5],[0,11]]){
+    const slab=new THREE.Mesh(new THREE.BoxGeometry(3.8,.7,2.4),bridgeConcreteMat);
+    slab.position.set(x+dx,3.0,mid+dz);
+    slab.rotation.y=(dx+dz)*.03;
+    group.add(slab);
+  }
+
+  for(const offset of [-8,8]){
+    const beam=new THREE.Mesh(new THREE.BoxGeometry(8,.55,.7),bridgeSteelMat);
+    beam.position.set(x,3.5,mid+offset);
+    beam.rotation.y=.16*(offset>0?1:-1);
+    group.add(beam);
+  }
+
+  // Work-zone cones and hazard barricades clearly block traffic.
+  for(const dz of [-10,-5,5,10]){
+    addConstructionCone(group,x-3.6,mid+dz);
+    addConstructionCone(group,x+3.6,mid+dz+1.5);
+  }
+
+  addBridgeBarricade(group,x,mid-2.8,0);
+  addBridgeBarricade(group,x,mid+2.8,Math.PI);
+
+  // Construction machine sits visibly on top of each bridge.
+  addBridgeTractor(group,x+(variant?2.0:-1.5),mid+(variant?-12:12),variant?Math.PI:0);
+
+  // Hanging work lights.
+  for(const z of [mid-15,mid+15]){
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.12,.16,5.5,8),bridgeSteelMat);
+    pole.position.set(x+4.6,5.0,z);
+    group.add(pole);
+    const lamp=new THREE.Mesh(new THREE.SphereGeometry(.45,10,8),bridgeWarningMat);
+    lamp.position.set(x+4.6,7.8,z);
+    group.add(lamp);
+  }
+}
+
+function makeUnfinishedTransitBridge({x,cityZ,transitZ,labelZ,variant=0}){
   const group=new THREE.Group();
   scene.add(group);
 
-  // Leave a large obvious missing section in the middle.
-  const gap=14;
+  // Build the ACTUAL full bridge now so it clearly connects the two streets.
+  const unfinishedDeck=road(x,cityZ,x,transitZ,11,true);
+  group.add(unfinishedDeck);
+
+  addBridgePillars(group,x,cityZ,transitZ);
+  addUnfinishedBridgeDetails(group,x,cityZ,transitZ,variant);
+
   const mid=(cityZ+transitZ)/2;
-  const cityEnd=mid+gap/2;
-  const transitEnd=mid-gap/2;
-
-  const cityStub=road(x,cityZ,x,cityEnd,11,true);
-  const transitStub=road(x,transitZ,x,transitEnd,11,true);
-  group.add(cityStub);
-  group.add(transitStub);
-
-  // Support blocks beneath each broken end make the bridge unmistakable.
-  for(const z of [cityEnd,transitEnd]){
-    const pier=new THREE.Mesh(new THREE.BoxGeometry(13,7,5.5),bridgeConcreteMat);
-    pier.position.set(x,-1.2,z);
-    pier.castShadow=true;
-    scene.add(pier);
-    group.add(pier);
-  }
-
-  addBridgeBarricade(group,x,cityEnd,0);
-  addBridgeBarricade(group,x,transitEnd,Math.PI);
-
   const label=spriteLabel('UNLOCKED AT $25K REVENUE','#5a3c22');
-  label.position.set(x,13,labelZ ?? mid);
+  label.position.set(x,14,labelZ ?? mid);
   label.scale.multiplyScalar(.72);
   scene.add(label);
   transitBridgeLabels.push(label);
 
   transitBrokenBridgeGroups.push(group);
 
+  // Clean finished bridge swaps in at unlock.
   const completed=road(x,cityZ,x,transitZ,11,true);
   completed.visible=false;
   transitCompleteBridges.push(completed);
 }
 
-// Left bridge: directly continues the main-city north/south street.
-// Right bridge: directly continues the airport/transit street.
-makeBrokenTransitBridge({x:-36,cityZ:-145,transitZ:-191,labelZ:-168});
-makeBrokenTransitBridge({x:205,cityZ:-158,transitZ:-208,labelZ:-183});
+// Both bridges line up directly with existing street approaches.
+makeUnfinishedTransitBridge({x:-36,cityZ:-145,transitZ:-191,labelZ:-168,variant:0});
+makeUnfinishedTransitBridge({x:205,cityZ:-158,transitZ:-208,labelZ:-183,variant:1});
 
 function unlockTransitBridges(){
   transitBrokenBridgeGroups.forEach(g=>g.visible=false);
