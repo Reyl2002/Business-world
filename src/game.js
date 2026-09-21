@@ -372,7 +372,10 @@ const mainPoints = [
   [145,25],[127,76],[91,113],[39,134],[-24,137],[-81,127],[-124,100],[-147,55],[-154,3],[-150,-46]
 ];
 const airportPoints = [[142,-128],[186,-153],[246,-158],[305,-145],[344,-111],[356,-62],[350,-12],[326,34],[286,68],[230,79],[181,66],[146,38],[126,-5],[124,-58]];
-const transitPoints = [[194,108],[232,92],[290,91],[347,108],[382,141],[394,185],[386,229],[354,260],[304,276],[247,271],[205,252],[181,218],[176,169]];
+const transitPoints = [
+  [-120,-420],[-52,-452],[45,-466],[145,-454],[226,-420],[268,-368],[277,-308],
+  [258,-250],[214,-211],[136,-190],[45,-192],[-45,-214],[-108,-254],[-137,-310],[-136,-365]
+];
 
 createShoreFoam(mainPoints,1.055);
 createShoreFoam(mainPoints,1.09);
@@ -424,11 +427,19 @@ road(190,-120,190,44,11);
 road(258,-120,258,48,11);
 road(310,-105,310,38,11);
 
-// $25k Transit District local street grid.
-road(202,142,376,142,11);
-road(198,228,374,228,11);
-road(232,112,232,253,11);
-road(337,116,337,250,11);
+// $25k Transit District — a major expansion zone above the original city.
+// Roads loop around the rail terminal and leave large square areas open for future buildings.
+road(-92,-232,226,-232,12);
+road(-108,-402,236,-402,12);
+road(-111,-276,218,-276,10);
+road(-108,-370,235,-370,10);
+road(-72,-425,-72,-214,11);
+road(72,-445,72,-205,12);
+road(205,-420,205,-224,11);
+
+// Two short boulevard spurs frame the civic station plaza without crossing the tracks.
+road(-72,-320,-18,-320,10);
+road(158,-320,205,-320,10);
 
 function spriteLabel(text,bg='#143e62'){
   const c=document.createElement('canvas'); c.width=512; c.height=160;
@@ -1114,13 +1125,54 @@ for(const sx of [226,246,266,286]){
   scene.add(gateMark);
 }
 
-const transitStation=createTransitStation(285,181);
+const transitStation=createTransitStation(72,-322);
 setTransitStationLockedAppearance(transitStation,true);
 
 const transitLockLabel=spriteLabel('LOCKED · $25,000 REVENUE','#4d5358');
-transitLockLabel.position.set(285,18,128);
+transitLockLabel.position.set(72,18,-388);
 transitLockLabel.scale.multiplyScalar(.9);
 scene.add(transitLockLabel);
+
+// Major expansion landscaping: a formal arrival park and future-development pads.
+const transitDistrictGroup=new THREE.Group();
+const transitParkMat=new THREE.MeshStandardMaterial({color:0x6cab62,roughness:1});
+const transitStoneMat=new THREE.MeshStandardMaterial({color:0xd9d4c9,roughness:.9});
+const transitLockedPadMat=new THREE.MeshStandardMaterial({color:0x858a8d,roughness:.95});
+
+const transitPark=new THREE.Mesh(new THREE.CylinderGeometry(27,28,.6,40),transitParkMat);
+transitPark.position.set(-16,.38,-324);
+transitPark.receiveShadow=true;
+transitDistrictGroup.add(transitPark);
+
+const transitParkRing=new THREE.Mesh(new THREE.RingGeometry(29,34,40),transitStoneMat);
+transitParkRing.rotation.x=-Math.PI/2;
+transitParkRing.position.set(-16,.72,-324);
+transitDistrictGroup.add(transitParkRing);
+
+for(const [tx,tz] of [[-34,-324],[-25,-307],[-7,-307],[2,-324],[-7,-341],[-25,-341]]){
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.34,.46,3.2,8),new THREE.MeshStandardMaterial({color:0x75513a,roughness:1}));
+  trunk.position.set(tx,1.7,tz);
+  transitDistrictGroup.add(trunk);
+  const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(2.4,1),new THREE.MeshStandardMaterial({color:0x4b9651,roughness:1}));
+  crown.position.set(tx,5,tz);
+  crown.castShadow=true;
+  transitDistrictGroup.add(crown);
+}
+
+// Grey development pads make it obvious this $25k district has room for future towers and businesses.
+for(const [px,pz,sx,sz] of [
+  [-52,-252,48,34],
+  [160,-252,54,34],
+  [-48,-386,52,28],
+  [162,-386,58,28]
+]){
+  const pad=new THREE.Mesh(new THREE.BoxGeometry(sx,.32,sz),transitLockedPadMat);
+  pad.position.set(px,.28,pz);
+  pad.receiveShadow=true;
+  transitDistrictGroup.add(pad);
+}
+scene.add(transitDistrictGroup);
+transitPark.material.color.setHex(0x777d79);
 
 // DESTINATION PARKING
 // Every building gets a real parking lot. Cars remain visible when parked,
@@ -1490,6 +1542,8 @@ function unlockTransitDistrict(){
   transitUnlocked=true;
   transitIsland.setTopMaterial(mats.grass2);
   setTransitStationLockedAppearance(transitStation,false);
+  transitPark.material.color.setHex(0x6cab62);
+  transitLockedPadMat.color.setHex(0x98c879);
   transitStation.userData.description='Underground Central Station is open. Trains now enter and exit through the underground tunnels automatically.';
   transitStation.userData.train.visible=true;
   transitLockLabel.visible=false;
@@ -1593,8 +1647,8 @@ function animate(){
   const t=clock.elapsedTime;
   controls.update();
   // Keep free panning usable without letting the camera get permanently lost.
-  controls.target.x = THREE.MathUtils.clamp(controls.target.x,-185,430);
-  controls.target.z = THREE.MathUtils.clamp(controls.target.z,-175,310);
+  controls.target.x = THREE.MathUtils.clamp(controls.target.x,-230,430);
+  controls.target.z = THREE.MathUtils.clamp(controls.target.z,-490,180);
   controls.target.y = THREE.MathUtils.clamp(controls.target.y,0,45);
   workers.forEach(w=>moveRoute(w,dt));
   cars.forEach(c=>updateDestinationCar(c,dt));
