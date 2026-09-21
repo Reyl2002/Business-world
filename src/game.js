@@ -256,7 +256,8 @@ const mats = {
   yellow:new THREE.MeshStandardMaterial({color:0xf1ca4d, roughness:.75}),
   white:new THREE.MeshStandardMaterial({color:0xf7f6ef, roughness:.8}),
   locked:new THREE.MeshStandardMaterial({color:0x80858a, roughness:1}),
-  sand:new THREE.MeshStandardMaterial({color:0xe8c77f, roughness:1})
+  sand:new THREE.MeshStandardMaterial({color:0xe8c77f, roughness:1}),
+  bridgeGuard:new THREE.MeshStandardMaterial({color:0x2f363c, roughness:.72, metalness:.08})
 };
 
 const clickable = [];
@@ -581,13 +582,35 @@ function road(ax,az,bx,bz,width=10,bridge=false){
       sw.position.set(0,.2,side*(width/2+1));
       group.add(sw);
     }
+
+    // Normal city roads keep the dashed center markings.
+    for(let x=-len/2+7; x<len/2-3; x+=12){
+      const dash = new THREE.Mesh(new THREE.BoxGeometry(6,.08,.45), mats.yellow);
+      dash.position.set(x,.26,0);
+      group.add(dash);
+    }
+  }else{
+    // Bridges use a cleaner continuous center marking instead of the old
+    // repeating strip pattern that looked gray from a distance.
+    const centerLine=new THREE.Mesh(
+      new THREE.BoxGeometry(Math.max(1,len-2),.09,.34),
+      mats.yellow
+    );
+    centerLine.position.set(0,.27,0);
+    group.add(centerLine);
+
+    // Dark clean guard edges make the bridge silhouette more intentional.
+    for(const side of [-1,1]){
+      const guard=new THREE.Mesh(
+        new THREE.BoxGeometry(Math.max(1,len-1),.75,.38),
+        mats.bridgeGuard
+      );
+      guard.position.set(0,.58,side*(width/2-.22));
+      guard.castShadow=true;
+      group.add(guard);
+    }
   }
 
-  for(let x=-len/2+7; x<len/2-3; x+=12){
-    const dash = new THREE.Mesh(new THREE.BoxGeometry(6,.08,.45), mats.yellow);
-    dash.position.set(x,.26,0);
-    group.add(dash);
-  }
   scene.add(group);
   return group;
 }
