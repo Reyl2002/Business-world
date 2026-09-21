@@ -374,9 +374,9 @@ const mainPoints = [
   [145,25],[127,76],[91,113],[39,134],[-24,137],[-81,127],[-124,100],[-147,55],[-154,3],[-150,-46]
 ];
 const airportPoints = [
-  [132,-168],[190,-196],[270,-205],[348,-192],[398,-158],[416,-105],
-  [414,-42],[392,20],[360,70],[312,104],[250,117],[190,110],
-  [145,88],[120,52],[112,7],[113,-52],[118,-112]
+  [154,-168],[205,-196],[278,-205],[350,-192],[400,-158],[418,-105],
+  [416,-42],[394,20],[362,72],[314,106],[252,119],[190,112],
+  [145,90],[132,52],[138,16],[154,-10],[160,-55],[152,-112]
 ];
 const transitPoints = [
   [-120,-420],[-52,-452],[45,-466],[145,-454],[226,-420],[268,-368],[277,-308],
@@ -441,10 +441,16 @@ function road(ax,az,bx,bz,width=10,bridge=false){
 
 const bridge = road(108,-72,164,-58,11,true);
 bridge.visible = false;
-road(164,-58,310,-58,11);
-road(190,-120,190,44,11);
+
+// Narrow bridge approach: the city and airport remain visibly separate islands.
+road(164,-58,224,-58,11);
+road(224,-58,390,-58,11);
+
+// Airport circulation stays mostly on the terminal / airfield side,
+// preserving the western build zone.
 road(258,-120,258,48,11);
-road(310,-105,310,38,11);
+road(330,-130,330,55,11);
+road(390,-105,390,48,11);
 
 // $25k Transit District — a major expansion zone above the original city.
 // Roads loop around the rail terminal and leave large square areas open for future buildings.
@@ -2154,50 +2160,60 @@ const airportBuilding = createAirportTerminal(303,-24);
 airportBuilding.traverse(o=>{ if(o.material && o.material.color) o.material.color.multiplyScalar(.72); });
 
 const airportSurfaceMat=new THREE.MeshStandardMaterial({color:0x4a5258,roughness:.93});
-const runway=new THREE.Mesh(new THREE.BoxGeometry(224,.45,21),mats.road);
-runway.position.set(296,.3,-135);
+
+// RIGHT-SIDE AVIATION ZONE
+// Planes and runway activity live on the far east/right side as visual progression.
+// This is decorative airport activity, not a player-controlled system.
+const runway=new THREE.Mesh(new THREE.BoxGeometry(22,.45,230),mats.road);
+runway.position.set(384,.3,-43);
 scene.add(runway);
 
-// Runway centerline and threshold bars.
-for(let x=198;x<398;x+=18){
-  const stripe=new THREE.Mesh(new THREE.BoxGeometry(9,.1,1.1),mats.white);
-  stripe.position.set(x,.6,-135);
+// Runway centerline.
+for(let z=-145;z<62;z+=18){
+  const stripe=new THREE.Mesh(new THREE.BoxGeometry(1.1,.1,9),mats.white);
+  stripe.position.set(384,.6,z);
   scene.add(stripe);
 }
-for(const x of [190,398]){
-  for(const zz of [-142,-138,-134,-130,-126]){
-    const threshold=new THREE.Mesh(new THREE.BoxGeometry(10,.08,1.3),mats.white);
-    threshold.position.set(x,.62,zz);
+
+// Runway threshold bars.
+for(const z of [-155,72]){
+  for(const xx of [376,380,384,388,392]){
+    const threshold=new THREE.Mesh(new THREE.BoxGeometry(1.3,.08,10),mats.white);
+    threshold.position.set(xx,.62,z);
     scene.add(threshold);
   }
 }
 
-// Main parallel taxiway and runway connectors.
-const taxiway=new THREE.Mesh(new THREE.BoxGeometry(205,.36,10),mats.road);
-taxiway.position.set(300,.28,-96);
+// Parallel taxiway stays beside the runway on the right side.
+const taxiway=new THREE.Mesh(new THREE.BoxGeometry(10,.36,205),mats.road);
+taxiway.position.set(352,.28,-43);
 scene.add(taxiway);
 
-for(const x of [215,260,305,350]){
-  const connector=new THREE.Mesh(new THREE.BoxGeometry(9,.34,40),mats.road);
-  connector.position.set(x,.28,-116);
+// Taxiway-to-runway connectors.
+for(const z of [-120,-65,-10,45]){
+  const connector=new THREE.Mesh(new THREE.BoxGeometry(34,.34,9),mats.road);
+  connector.position.set(368,.28,z);
   scene.add(connector);
 }
 
-// Large apron in front of gates.
-const apron=new THREE.Mesh(new THREE.BoxGeometry(150,.32,52),airportSurfaceMat);
-apron.position.set(295,.27,-65);
+// Apron is concentrated behind/right of the terminal.
+const apron=new THREE.Mesh(new THREE.BoxGeometry(92,.32,82),airportSurfaceMat);
+apron.position.set(314,.27,-74);
 scene.add(apron);
 
-for(const sx of [235,260,285,310,335]){
-  const gateMark=new THREE.Mesh(new THREE.BoxGeometry(17,.08,.8),mats.yellow);
-  gateMark.position.set(sx,.47,-62);
+for(const [sx,sz] of [[292,-78],[316,-78],[340,-78],[316,-52]]){
+  const gateMark=new THREE.Mesh(new THREE.BoxGeometry(16,.08,.8),mats.yellow);
+  gateMark.position.set(sx,.47,sz);
   scene.add(gateMark);
+
   const noseMark=new THREE.Mesh(new THREE.BoxGeometry(.7,.08,15),mats.yellow);
-  noseMark.position.set(sx,.47,-72);
+  noseMark.position.set(sx,.47,sz-10);
   scene.add(noseMark);
 }
 
-// Small stylized passenger planes parked at gates.
+// Stylized aircraft are decorative only.
+const airportDecorPlanes=[];
+
 function createAirportPlane(x,z,rotation=0){
   const g=new THREE.Group();
   g.position.set(x,1.2,z);
@@ -2217,7 +2233,6 @@ function createAirportPlane(x,z,rotation=0){
   g.add(nose);
 
   const wing=new THREE.Mesh(new THREE.BoxGeometry(7,.55,18),planeWhite);
-  wing.position.set(0,0,0);
   g.add(wing);
 
   const tailWing=new THREE.Mesh(new THREE.BoxGeometry(3.3,.4,8),planeWhite);
@@ -2240,38 +2255,88 @@ function createAirportPlane(x,z,rotation=0){
   return g;
 }
 
-createAirportPlane(238,-68,0);
-createAirportPlane(283,-68,0);
-createAirportPlane(328,-68,0);
+// Parked gate aircraft stay on the right-side apron.
+createAirportPlane(300,-78,0);
+createAirportPlane(330,-78,0);
 
-// Service road around terminal/apron.
-road(180,-38,390,-38,10);
-road(390,-38,390,48,10);
+// One decorative aircraft taxis to the runway, accelerates and takes off.
+// It only starts moving after Airport Island unlocks.
+const takeoffPlane=createAirportPlane(316,-52,-Math.PI/2);
+airportDecorPlanes.push({
+  obj:takeoffPlane,
+  route:[
+    [316,-52,1.2],
+    [352,-52,1.2],
+    [352,-120,1.2],
+    [384,-120,1.2],
+    [384,-155,1.2],
+    [384,50,1.2],
+    [384,92,7],
+    [384,135,21]
+  ],
+  index:0,
+  speed:18,
+  wait:2.5
+});
+
+function updateDecorativeAirportPlanes(dt){
+  airportDecorPlanes.forEach(p=>{
+    if(!airportUnlocked) return;
+    if(p.wait>0){ p.wait-=dt; return; }
+
+    const a=p.route[p.index];
+    const b=p.route[(p.index+1)%p.route.length];
+    const dx=b[0]-p.obj.position.x;
+    const dy=b[2]-p.obj.position.y;
+    const dz=b[1]-p.obj.position.z;
+    const dist=Math.hypot(dx,dy,dz);
+
+    if(dist<0.8){
+      p.index++;
+      if(p.index>=p.route.length-1){
+        p.index=0;
+        p.obj.position.set(p.route[0][0],p.route[0][2],p.route[0][1]);
+        p.wait=5;
+        return;
+      }
+    }else{
+      const step=Math.min(dist,p.speed*dt);
+      p.obj.position.x+=dx/dist*step;
+      p.obj.position.y+=dy/dist*step;
+      p.obj.position.z+=dz/dist*step;
+      p.obj.rotation.y=Math.atan2(dx,dz);
+    }
+  });
+}
+
+// Terminal/service road is kept away from the player build zone.
+road(250,-38,405,-38,10);
+road(405,-38,405,48,10);
 
 // Dedicated open build zone on the LEFT side of Airport Island.
-// Intentionally left mostly empty for future player-placed buildings.
+// This stays clear of planes, taxiways and runway activity.
 const airportBuildZone=new THREE.Group();
 const buildZoneBase=new THREE.Mesh(
-  new THREE.BoxGeometry(78,.24,66),
+  new THREE.BoxGeometry(82,.24,72),
   new THREE.MeshStandardMaterial({color:0x8d9394,roughness:.98})
 );
-buildZoneBase.position.set(178,.24,40);
+buildZoneBase.position.set(183,.24,42);
 buildZoneBase.receiveShadow=true;
 airportBuildZone.add(buildZoneBase);
 
 const buildZoneLineMat=new THREE.MeshStandardMaterial({color:0xc7ccca,roughness:.9});
 for(let gx=-30;gx<=30;gx+=15){
-  const line=new THREE.Mesh(new THREE.BoxGeometry(.28,.08,62),buildZoneLineMat);
-  line.position.set(178+gx,.42,40);
+  const line=new THREE.Mesh(new THREE.BoxGeometry(.28,.08,68),buildZoneLineMat);
+  line.position.set(183+gx,.42,42);
   airportBuildZone.add(line);
 }
 for(let gz=-24;gz<=24;gz+=12){
-  const line=new THREE.Mesh(new THREE.BoxGeometry(74,.08,.28),buildZoneLineMat);
-  line.position.set(178,.42,40+gz);
+  const line=new THREE.Mesh(new THREE.BoxGeometry(78,.08,.28),buildZoneLineMat);
+  line.position.set(183,.42,42+gz);
   airportBuildZone.add(line);
 }
 const buildZoneLabel=spriteLabel('PLAYER BUILD ZONE','#52636b');
-buildZoneLabel.position.set(178,8.5,40);
+buildZoneLabel.position.set(183,8.5,42);
 buildZoneLabel.scale.multiplyScalar(.7);
 airportBuildZone.add(buildZoneLabel);
 scene.add(airportBuildZone);
@@ -2418,7 +2483,7 @@ const parkingByName={
   'Cafe':createParkingLot({name:'Cafe',x:-61,z:34,entryX:-61,entryZ:25,spaces:4}),
   'Market':createParkingLot({name:'Market',x:0,z:34,entryX:0,entryZ:25,spaces:4}),
   'School':createParkingLot({name:'School',x:108,z:35,entryX:108,entryZ:25,spaces:5}),
-  'Airport':createParkingLot({name:'Airport',x:343,z:54,entryX:390,entryZ:48,spaces:10,airport:true})
+  'Airport':createParkingLot({name:'Airport',x:344,z:55,entryX:405,entryZ:48,spaces:10,airport:true})
 };
 
 destinations.forEach(b=>{
@@ -2835,6 +2900,7 @@ function animate(){
   controls.target.y = THREE.MathUtils.clamp(controls.target.y,0,45);
   workers.forEach(w=>moveRoute(w,dt));
   cars.forEach(c=>updateDestinationCar(c,dt));
+  updateDecorativeAirportPlanes(dt);
   updateTransitTrain(dt);
   updateTransitBridgeBuild(dt);
   updateMetrics(dt);
