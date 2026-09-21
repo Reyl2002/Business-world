@@ -454,6 +454,101 @@ for(let x=190;x<258;x+=13){
   stripe.position.set(x,.6,-58); scene.add(stripe);
 }
 
+// DESTINATION PARKING
+// Every building gets a real parking lot. Cars remain visible when parked,
+// leave a lot, drive the road network to another building, then pull into
+// an available parking space instead of disappearing.
+const parkingLots=[];
+const parkingAsphalt=new THREE.MeshStandardMaterial({color:0x343b40,roughness:.96});
+const parkingStripeMat=new THREE.MeshStandardMaterial({color:0xf2f0e8,roughness:.8});
+const parkingCurbMat=new THREE.MeshStandardMaterial({color:0xc9c5bb,roughness:1});
+
+function driveway(ax,az,bx,bz,width=3.4){
+  const dx=bx-ax,dz=bz-az,len=Math.hypot(dx,dz),angle=Math.atan2(dz,dx);
+  const m=new THREE.Mesh(new THREE.BoxGeometry(len,.16,width),parkingAsphalt);
+  m.position.set((ax+bx)/2,.25,(az+bz)/2);
+  m.rotation.y=-angle;
+  m.receiveShadow=true;
+  scene.add(m);
+  return m;
+}
+
+function createParkingLot({name,x,z,entryX,entryZ,spaces=4,airport=false}){
+  const g=new THREE.Group();
+  g.position.set(x,.22,z);
+
+  const width=Math.max(17,spaces*4.4+2.2);
+  const depth=8.2;
+  const base=new THREE.Mesh(new THREE.BoxGeometry(width,.24,depth),parkingAsphalt);
+  base.receiveShadow=true;
+  g.add(base);
+
+  // curb
+  for(const zz of [-depth/2,depth/2]){
+    const curb=new THREE.Mesh(new THREE.BoxGeometry(width+.8,.28,.42),parkingCurbMat);
+    curb.position.set(0,.2,zz);
+    g.add(curb);
+  }
+  for(const xx of [-width/2,width/2]){
+    const curb=new THREE.Mesh(new THREE.BoxGeometry(.42,.28,depth+.8),parkingCurbMat);
+    curb.position.set(xx,.2,0);
+    g.add(curb);
+  }
+
+  const spotPositions=[];
+  const spacing=width/spaces;
+  for(let i=0;i<spaces;i++){
+    const sx=-width/2+spacing*(i+.5);
+    spotPositions.push([x+sx,z]);
+    if(i>0){
+      const line=new THREE.Mesh(new THREE.BoxGeometry(.18,.08,depth-1.0),parkingStripeMat);
+      line.position.set(-width/2+spacing*i,.2,0);
+      g.add(line);
+    }
+  }
+
+  // small P sign
+  const signPole=new THREE.Mesh(new THREE.CylinderGeometry(.11,.14,2.6,8),new THREE.MeshStandardMaterial({color:0x454b50,roughness:.8}));
+  signPole.position.set(-width/2+1.2,1.5,-depth/2+.7);
+  g.add(signPole);
+  const sign=spriteLabel('P','#184f78');
+  sign.scale.multiplyScalar(.23);
+  sign.position.set(-width/2+1.2,3.2,-depth/2+.7);
+  g.add(sign);
+
+  scene.add(g);
+  driveway(x,z,entryX,entryZ,3.2);
+
+  const lot={
+    name,
+    group:g,
+    entry:[entryX,entryZ],
+    spots:spotPositions.map((p,i)=>({position:p,index:i,occupied:false,reserved:false})),
+    airport
+  };
+  parkingLots.push(lot);
+  return lot;
+}
+
+// Parking is deliberately placed on the road-facing side of each building.
+const parkingByName={
+  'Marketing Studio':createParkingLot({name:'Marketing Studio',x:-105,z:-62,entryX:-105,entryZ:-72,spaces:4}),
+  'Accounting Hub':createParkingLot({name:'Accounting Hub',x:-61,z:-62,entryX:-61,entryZ:-72,spaces:4}),
+  'BW Headquarters':createParkingLot({name:'BW Headquarters',x:-4,z:-80,entryX:-4,entryZ:-72,spaces:5}),
+  'Think Hub':createParkingLot({name:'Think Hub',x:58,z:-64,entryX:58,entryZ:-72,spaces:5}),
+  'Apartments':createParkingLot({name:'Apartments',x:-104,z:34,entryX:-104,entryZ:25,spaces:4}),
+  'Cafe':createParkingLot({name:'Cafe',x:-61,z:34,entryX:-61,entryZ:25,spaces:4}),
+  'Market':createParkingLot({name:'Market',x:0,z:34,entryX:0,entryZ:25,spaces:4}),
+  'School':createParkingLot({name:'School',x:108,z:35,entryX:108,entryZ:25,spaces:5}),
+  'Airport':createParkingLot({name:'Airport',x:245,z:-43,entryX:226,entryZ:-58,spaces:6,airport:true})
+};
+
+destinations.forEach(b=>{
+  const lot=parkingByName[b.userData.name];
+  if(lot) b.userData.parkingLot=lot;
+});
+airportBuilding.userData.parkingLot=parkingByName['Airport'];
+
 function tree(x,z,scale=1){
   const g=new THREE.Group(); g.position.set(x,0,z);
   const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.4,.6,4.2,8),new THREE.MeshStandardMaterial({color:0x7a5132}));
@@ -540,25 +635,169 @@ function moveRoute(item,dt){
 function car(color){
   const g=new THREE.Group();
   const body=new THREE.Mesh(new THREE.BoxGeometry(4.2,1.25,2.2),new THREE.MeshStandardMaterial({color,metalness:.12,roughness:.5}));
-  body.position.y=.8; body.castShadow=true; g.add(body);
+  body.position.y=.8;
+  body.castShadow=true;
+  g.add(body);
   const roof=new THREE.Mesh(new THREE.BoxGeometry(2.3,.85,1.75),new THREE.MeshStandardMaterial({color:0xb8d9e7,roughness:.3}));
-  roof.position.y=1.65; g.add(roof); scene.add(g); return g;
+  roof.position.y=1.65;
+  g.add(roof);
+  scene.add(g);
+  return g;
 }
-const carRoutes=[
-  [[-112,-72],[112,-72],[112,-26],[-112,-26],[-112,-72]],
-  [[-120,25],[120,25],[120,76],[-105,76],[-105,25]],
-  [[-86,-98],[-86,98],[-36,98],[-36,-116],[-86,-98]],
-  [[35,-116],[35,112],[86,112],[86,-90],[35,-116]]
-];
-for(let i=0;i<14;i++){
-  cars.push({obj:car([0xe45a45,0x3486d9,0xe0b638,0xf4f4f4,0x555b67][i%5]),route:carRoutes[i%carRoutes.length],t:i*.64,speed:6.5+(i%4)});
+
+const mainRoadX=[-86,-36,35,86];
+const mainRoadZ=[-72,-26,25,76];
+
+function nearestRoadNode([x,z]){
+  let best=[mainRoadX[0],mainRoadZ[0]],bestD=Infinity;
+  for(const rx of mainRoadX){
+    for(const rz of mainRoadZ){
+      const d=(rx-x)*(rx-x)+(rz-z)*(rz-z);
+      if(d<bestD){bestD=d;best=[rx,rz]}
+    }
+  }
+  return best;
 }
-function movePolyline(item,dt){
-  item.t += dt*item.speed/21;
-  const r=item.route, i=Math.floor(item.t)%r.length, j=(i+1)%r.length, f=item.t-Math.floor(item.t);
-  const a=r[i], b=r[j];
-  item.obj.position.set(THREE.MathUtils.lerp(a[0],b[0],f),.35,THREE.MathUtils.lerp(a[1],b[1],f));
-  item.obj.rotation.y=Math.atan2(b[0]-a[0],b[1]-a[1]);
+
+function mainRoadPath(startEntry,endEntry){
+  const s=nearestRoadNode(startEntry);
+  const e=nearestRoadNode(endEntry);
+  const path=[startEntry,s];
+  if(s[0]!==e[0]) path.push([e[0],s[1]]);
+  if(s[1]!==e[1]) path.push([e[0],e[1]]);
+  path.push(endEntry);
+  return path;
+}
+
+function routeBetweenLots(startLot,endLot,startSpot,endSpot){
+  const start=[startSpot.position[0],startSpot.position[1]];
+  const finish=[endSpot.position[0],endSpot.position[1]];
+  const startAirport=startLot.airport;
+  const endAirport=endLot.airport;
+
+  if(!startAirport && !endAirport){
+    return [start,...mainRoadPath(startLot.entry,endLot.entry),finish];
+  }
+
+  const bridgeMain=[86,-72];
+  const bridgeChain=[[108,-72],[164,-58],[226,-58]];
+
+  if(!startAirport && endAirport){
+    const path=[start,...mainRoadPath(startLot.entry,bridgeMain),...bridgeChain,endLot.entry,finish];
+    return path;
+  }
+
+  if(startAirport && !endAirport){
+    const reverseBridge=[...bridgeChain].reverse();
+    return [start,startLot.entry,...reverseBridge,bridgeMain,...mainRoadPath(bridgeMain,endLot.entry),finish];
+  }
+
+  return [start,startLot.entry,endLot.entry,finish];
+}
+
+function freeSpot(lot){
+  return lot.spots.find(s=>!s.occupied&&!s.reserved) || null;
+}
+
+function availableDestination(currentLot){
+  const options=parkingLots.filter(lot=>{
+    if(lot===currentLot) return false;
+    if(lot.airport && !airportUnlocked) return false;
+    return !!freeSpot(lot);
+  });
+  if(!options.length) return null;
+  return options[Math.floor(Math.random()*options.length)];
+}
+
+function beginTrip(vehicle){
+  const destination=availableDestination(vehicle.currentLot);
+  if(!destination){
+    vehicle.wait=2;
+    return;
+  }
+  const targetSpot=freeSpot(destination);
+  if(!targetSpot){
+    vehicle.wait=2;
+    return;
+  }
+
+  // Reserve destination before leaving so two cars never choose the same space.
+  targetSpot.reserved=true;
+  vehicle.currentSpot.occupied=false;
+  vehicle.destination=destination;
+  vehicle.targetSpot=targetSpot;
+  vehicle.path=routeBetweenLots(vehicle.currentLot,destination,vehicle.currentSpot,targetSpot);
+  vehicle.pathIndex=0;
+  vehicle.state='driving';
+}
+
+function updateDestinationCar(vehicle,dt){
+  if(vehicle.state==='parked'){
+    vehicle.wait-=dt;
+    if(vehicle.wait<=0) beginTrip(vehicle);
+    return;
+  }
+
+  if(vehicle.state!=='driving' || vehicle.path.length<2) return;
+
+  let remaining=vehicle.speed*dt;
+  while(remaining>0 && vehicle.pathIndex<vehicle.path.length-1){
+    const a=vehicle.path[vehicle.pathIndex];
+    const b=vehicle.path[vehicle.pathIndex+1];
+    const px=vehicle.obj.position.x,pz=vehicle.obj.position.z;
+    const dx=b[0]-px,dz=b[1]-pz;
+    const dist=Math.hypot(dx,dz);
+
+    if(dist<=remaining+.001){
+      vehicle.obj.position.set(b[0],.35,b[1]);
+      vehicle.pathIndex++;
+      remaining-=dist;
+    }else{
+      const ux=dx/dist,uz=dz/dist;
+      vehicle.obj.position.x+=ux*remaining;
+      vehicle.obj.position.z+=uz*remaining;
+      vehicle.obj.rotation.y=Math.atan2(ux,uz);
+      remaining=0;
+    }
+  }
+
+  if(vehicle.pathIndex>=vehicle.path.length-1){
+    vehicle.obj.position.set(vehicle.targetSpot.position[0],.35,vehicle.targetSpot.position[1]);
+    vehicle.currentLot=vehicle.destination;
+    vehicle.currentSpot=vehicle.targetSpot;
+    vehicle.currentSpot.reserved=false;
+    vehicle.currentSpot.occupied=true;
+    vehicle.destination=null;
+    vehicle.targetSpot=null;
+    vehicle.path=[];
+    vehicle.state='parked';
+    vehicle.wait=3+Math.random()*7;
+  }
+}
+
+const startingLots=parkingLots.filter(l=>!l.airport);
+const carColors=[0xe45a45,0x3486d9,0xe0b638,0xf4f4f4,0x555b67,0x47a36f,0x9458a9,0xe67b35];
+
+for(let i=0;i<Math.min(12,startingLots.length*2);i++){
+  const lot=startingLots[i%startingLots.length];
+  const spot=freeSpot(lot);
+  if(!spot) continue;
+  spot.occupied=true;
+  const obj=car(carColors[i%carColors.length]);
+  obj.position.set(spot.position[0],.35,spot.position[1]);
+  obj.rotation.y=Math.PI/2;
+  cars.push({
+    obj,
+    currentLot:lot,
+    currentSpot:spot,
+    destination:null,
+    targetSpot:null,
+    path:[],
+    pathIndex:0,
+    state:'parked',
+    wait:1.5+Math.random()*8,
+    speed:13+Math.random()*3
+  });
 }
 
 function unlockAirport(){
@@ -676,7 +915,7 @@ function animate(){
   controls.target.z = THREE.MathUtils.clamp(controls.target.z,-175,165);
   controls.target.y = THREE.MathUtils.clamp(controls.target.y,0,45);
   workers.forEach(w=>moveRoute(w,dt));
-  cars.forEach(c=>movePolyline(c,dt));
+  cars.forEach(c=>updateDestinationCar(c,dt));
   updateMetrics(dt);
   updateLighting(t);
   updateWeather(dt);
