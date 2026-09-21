@@ -1,0 +1,466 @@
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const canvas = document.getElementById('game');
+const loading = document.getElementById('loading');
+const revenueEl = document.getElementById('revenue');
+const profitEl = document.getElementById('profit');
+const growthEl = document.getElementById('growth');
+const islandStatus = document.getElementById('islandStatus');
+const infoCard = document.getElementById('infoCard');
+const infoTitle = document.getElementById('infoTitle');
+const infoText = document.getElementById('infoText');
+
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
+renderer.setSize(innerWidth, innerHeight, false);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x78cae6);
+scene.fog = new THREE.FogExp2(0x8ed4e9, 0.0018);
+
+const camera = new THREE.PerspectiveCamera(42, innerWidth/innerHeight, 0.1, 1800);
+camera.position.set(170, 145, 205);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 5, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.075;
+controls.minDistance = 55;
+controls.maxDistance = 440;
+controls.minPolarAngle = Math.PI * 0.17;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.screenSpacePanning = true;
+controls.touches.ONE = THREE.TOUCH.ROTATE;
+controls.touches.TWO = THREE.TOUCH.DOLLY_PAN;
+
+const hemi = new THREE.HemisphereLight(0xcdf4ff, 0x4a653a, 2.25);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff0ca, 3.1);
+sun.position.set(-110, 190, 85);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -310;
+sun.shadow.camera.right = 310;
+sun.shadow.camera.top = 310;
+sun.shadow.camera.bottom = -310;
+scene.add(sun);
+
+const oceanMat = new THREE.MeshPhysicalMaterial({
+  color:0x1598bc, roughness:.2, transparent:true, opacity:.9, clearcoat:.25
+});
+const ocean = new THREE.Mesh(new THREE.PlaneGeometry(1100, 900), oceanMat);
+ocean.rotation.x = -Math.PI/2;
+ocean.position.y = -14;
+scene.add(ocean);
+
+const mats = {
+  grass:new THREE.MeshStandardMaterial({color:0x73b959, roughness:.95}),
+  grass2:new THREE.MeshStandardMaterial({color:0x80c866, roughness:.95}),
+  cliff:new THREE.MeshStandardMaterial({color:0x75685d, roughness:1}),
+  road:new THREE.MeshStandardMaterial({color:0x40484f, roughness:.95}),
+  sidewalk:new THREE.MeshStandardMaterial({color:0xd5d1c6, roughness:.95}),
+  yellow:new THREE.MeshStandardMaterial({color:0xf1ca4d, roughness:.75}),
+  white:new THREE.MeshStandardMaterial({color:0xf7f6ef, roughness:.8}),
+  locked:new THREE.MeshStandardMaterial({color:0x80858a, roughness:1})
+};
+
+const clickable = [];
+const workers = [];
+const cars = [];
+let revenue = 7500;
+let profit = 2650;
+let startRevenue = revenue;
+let airportUnlocked = false;
+let timeMode = 'AUTO';
+let weatherMode = 'CLEAR';
+
+function island(points, material, depth=16){
+  const shape = new THREE.Shape();
+  points.forEach(([x,z],i)=> i ? shape.lineTo(x,z) : shape.moveTo(x,z));
+  shape.closePath();
+
+  const top = new THREE.Mesh(new THREE.ShapeGeometry(shape), material);
+  top.rotation.x = -Math.PI/2;
+  top.position.y = .04;
+  top.receiveShadow = true;
+  scene.add(top);
+
+  const wallPos = [];
+  const indices = [];
+  points.forEach((a,i)=>{
+    const b = points[(i+1)%points.length];
+    const n = i*4;
+    wallPos.push(a[0],0,a[1], b[0],0,b[1], b[0],-depth,b[1], a[0],-depth,a[1]);
+    indices.push(n,n+1,n+2,n,n+2,n+3);
+  });
+  const wallGeo = new THREE.BufferGeometry();
+  wallGeo.setAttribute('position', new THREE.Float32BufferAttribute(wallPos,3));
+  wallGeo.setIndex(indices);
+  wallGeo.computeVertexNormals();
+  const wall = new THREE.Mesh(wallGeo, mats.cliff);
+  wall.castShadow = true;
+  wall.receiveShadow = true;
+  scene.add(wall);
+
+  return {top, wall};
+}
+
+const mainPoints = [
+  [-142,-83],[-118,-119],[-68,-139],[-12,-144],[50,-140],[105,-121],[137,-82],[151,-30],
+  [145,25],[127,76],[91,113],[39,134],[-24,137],[-81,127],[-124,100],[-147,55],[-154,3],[-150,-46]
+];
+const airportPoints = [[154,-98],[186,-112],[226,-106],[263,-84],[278,-48],[273,-10],[248,20],[209,31],[174,23],[148,2],[139,-41]];
+
+island(mainPoints, mats.grass, 17);
+const airportIsland = island(airportPoints, mats.locked, 18);
+
+function road(ax,az,bx,bz,width=10,bridge=false){
+  const dx=bx-ax, dz=bz-az, len=Math.hypot(dx,dz), angle=Math.atan2(dz,dx);
+  const group = new THREE.Group();
+  group.position.set((ax+bx)/2, bridge?1.8:.24, (az+bz)/2);
+  group.rotation.y = -angle;
+
+  const base = new THREE.Mesh(new THREE.BoxGeometry(len,.35,width), mats.road);
+  base.receiveShadow = true;
+  base.castShadow = bridge;
+  group.add(base);
+
+  if(!bridge){
+    for(const side of [-1,1]){
+      const sw = new THREE.Mesh(new THREE.BoxGeometry(len,.22,2), mats.sidewalk);
+      sw.position.set(0,.2,side*(width/2+1));
+      group.add(sw);
+    }
+  }
+
+  for(let x=-len/2+7; x<len/2-3; x+=12){
+    const dash = new THREE.Mesh(new THREE.BoxGeometry(6,.08,.45), mats.yellow);
+    dash.position.set(x,.26,0);
+    group.add(dash);
+  }
+  scene.add(group);
+  return group;
+}
+
+[
+  [-112,-72,112,-72],[-122,-26,120,-26],[-120,25,120,25],[-105,76,105,76],
+  [-86,-98,-86,98],[-36,-116,-36,111],[35,-116,35,112],[86,-90,86,92]
+].forEach(r=>road(...r));
+
+const bridge = road(108,-72,164,-58,11,true);
+bridge.visible = false;
+road(164,-58,226,-58,11);
+road(190,-94,190,-10,11);
+
+function spriteLabel(text,bg='#143e62'){
+  const c=document.createElement('canvas'); c.width=512; c.height=160;
+  const x=c.getContext('2d');
+  x.fillStyle=bg; x.beginPath(); x.roundRect(8,8,496,144,24); x.fill();
+  x.strokeStyle='rgba(255,255,255,.38)'; x.lineWidth=5; x.stroke();
+  x.fillStyle='#fff'; x.textAlign='center'; x.textBaseline='middle'; x.font='900 42px system-ui';
+  x.fillText(text,256,80);
+  const tex=new THREE.CanvasTexture(c); tex.colorSpace=THREE.SRGBColorSpace;
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false}));
+  s.scale.set(22,6.9,1);
+  return s;
+}
+
+function building({name,x,z,w=22,d=18,h=22,color=0x7fadd3,accent=0x315c7b,description=''}) {
+  const g=new THREE.Group();
+  g.position.set(x,.25,z);
+  g.userData={name,description};
+
+  const pad=new THREE.Mesh(new THREE.BoxGeometry(w+3,.55,d+3),mats.sidewalk);
+  pad.position.y=.3; g.add(pad);
+
+  const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,roughness:.72}));
+  body.position.y=h/2+.6; body.castShadow=true; body.receiveShadow=true; g.add(body);
+
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(w+1,.9,d+1),new THREE.MeshStandardMaterial({color:accent,roughness:.7}));
+  roof.position.y=h+1; g.add(roof);
+
+  const windows=new THREE.MeshStandardMaterial({color:0x8edcf4,emissive:0x1e5b76,emissiveIntensity:.45,roughness:.3});
+  const cols=Math.max(3,Math.floor(w/5));
+  const rows=Math.max(3,Math.floor(h/5));
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const wx=-w/2+2+(c*(w-4)/(cols-1));
+      const wy=3+r*((h-5)/Math.max(1,rows-1));
+      const win=new THREE.Mesh(new THREE.BoxGeometry(1.6,1.5,.13),windows);
+      win.position.set(wx,wy,d/2+.08); g.add(win);
+    }
+  }
+
+  const sign=spriteLabel(name);
+  sign.position.set(0,h*.7,d/2+.8);
+  sign.scale.multiplyScalar(Math.min(1.15,Math.max(.72,w/24)));
+  g.add(sign);
+
+  scene.add(g);
+  clickable.push(g);
+  return g;
+}
+
+const destinations = [
+  building({name:'Marketing Studio',x:-105,z:-48,w:25,d:20,h:24,color:0xdb7168,accent:0x813856,description:'Marketing content, social campaigns and brand growth.'}),
+  building({name:'Accounting Hub',x:-61,z:-48,w:24,d:20,h:28,color:0x609ed5,accent:0x2d5d93,description:'Invoices, bookkeeping, revenue, profit and forecasting.'}),
+  building({name:'BW Headquarters',x:-4,z:-96,w:28,d:24,h:43,color:0x4f91cb,accent:0x2f5878,description:'Central headquarters for Business World operations.'}),
+  building({name:'Think Tank',x:58,z:-48,w:27,d:23,h:25,color:0xc69a6a,accent:0x355a72,description:'Agents brainstorm strategy, automation and new business ideas.'}),
+  building({name:'Apartments',x:-104,z:51,w:24,d:21,h:30,color:0xdf9974,accent:0x865a47,description:'Home base for workers and residents.'}),
+  building({name:'Cafe',x:-31,z:56,w:25,d:21,h:15,color:0xd99661,accent:0x764b39,description:'Social space where agents can idle, meet and recharge.'}),
+  building({name:'Market',x:25,z:57,w:25,d:21,h:16,color:0xe5ad65,accent:0x287b5f,description:'Supplies and local commerce.'}),
+  building({name:'School',x:108,z:53,w:28,d:22,h:20,color:0xd98262,accent:0xa64f3b,description:'Community learning and worker development.'}),
+];
+
+const airportBuilding = building({name:'Airport',x:245,z:-27,w:26,d:19,h:14,color:0x93999d,accent:0x62676b,description:'Locked expansion island. Unlocks when total revenue reaches $10,000.'});
+airportBuilding.traverse(o=>{ if(o.material && o.material.color) o.material.color.multiplyScalar(.72); });
+
+const runway=new THREE.Mesh(new THREE.BoxGeometry(76,.45,17),mats.road);
+runway.position.set(222,.3,-58);
+scene.add(runway);
+for(let x=190;x<258;x+=13){
+  const stripe=new THREE.Mesh(new THREE.BoxGeometry(7,.1,1),mats.white);
+  stripe.position.set(x,.6,-58); scene.add(stripe);
+}
+
+function tree(x,z,scale=1){
+  const g=new THREE.Group(); g.position.set(x,0,z);
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.4,.6,4.2,8),new THREE.MeshStandardMaterial({color:0x7a5132}));
+  trunk.position.y=2.1; g.add(trunk);
+  const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(3.2*scale,1),new THREE.MeshStandardMaterial({color:0x46994e,roughness:1}));
+  crown.position.y=6; crown.castShadow=true; g.add(crown);
+  scene.add(g);
+}
+for(let x=-128;x<=125;x+=19){
+  for(let z=-110;z<=116;z+=20){
+    if(Math.abs(x)<30&&Math.abs(z)<34) continue;
+    if(Math.random()<.3) tree(x+(Math.random()*7-3.5),z+(Math.random()*7-3.5),.8+Math.random()*.35);
+  }
+}
+
+const plaza=new THREE.Mesh(new THREE.CylinderGeometry(31,33,1,48),new THREE.MeshStandardMaterial({color:0xd8d0bf,roughness:1}));
+plaza.position.y=.5; scene.add(plaza);
+const park=new THREE.Mesh(new THREE.CylinderGeometry(22,23,.45,48),new THREE.MeshStandardMaterial({color:0x79bd62,roughness:1}));
+park.position.y=1.05; scene.add(park);
+
+const boardCanvas=document.createElement('canvas'); boardCanvas.width=1024; boardCanvas.height=520;
+const bctx=boardCanvas.getContext('2d');
+const boardTex=new THREE.CanvasTexture(boardCanvas); boardTex.colorSpace=THREE.SRGBColorSpace;
+function drawBoard(){
+  bctx.fillStyle='#f8fbff'; bctx.fillRect(0,0,1024,520);
+  bctx.strokeStyle='#0f4c72'; bctx.lineWidth=14; bctx.strokeRect(14,14,996,492);
+  bctx.fillStyle='#123c5a'; bctx.font='900 66px system-ui'; bctx.fillText('BUSINESS GROWTH',48,94);
+  bctx.font='800 42px system-ui';
+  bctx.fillText('REVENUE',55,205); bctx.fillText('PROFIT',55,295); bctx.fillText('NEXT ISLAND',55,385);
+  bctx.textAlign='right'; bctx.fillStyle='#0b9c61'; bctx.font='900 58px system-ui';
+  bctx.fillText('$'+Math.floor(revenue).toLocaleString(),955,208);
+  bctx.fillText('$'+Math.floor(profit).toLocaleString(),955,298);
+  bctx.fillStyle=airportUnlocked?'#0b9c61':'#d08a12';
+  bctx.fillText(airportUnlocked?'UNLOCKED':'$10,000',955,388);
+  bctx.textAlign='left'; bctx.fillStyle='#4c6d80'; bctx.font='700 26px system-ui'; bctx.fillText('Business World · live city metrics',55,470);
+  boardTex.needsUpdate=true;
+}
+drawBoard();
+
+const monument=new THREE.Group();
+const pole=new THREE.Mesh(new THREE.CylinderGeometry(1.6,2,22,16),new THREE.MeshStandardMaterial({color:0x858b8f,metalness:.2,roughness:.55}));
+pole.position.y=12; monument.add(pole);
+const frame=new THREE.Mesh(new THREE.BoxGeometry(38,20,1.5),new THREE.MeshStandardMaterial({color:0x14202a,roughness:.55}));
+frame.position.y=30; monument.add(frame);
+const screen=new THREE.Mesh(new THREE.PlaneGeometry(35.8,17.8),new THREE.MeshBasicMaterial({map:boardTex}));
+screen.position.set(0,30,.8); monument.add(screen);
+monument.userData={name:'Business Growth Monument',description:'The center of Business World. Live city revenue and profit are displayed here.'};
+scene.add(monument); clickable.push(monument);
+
+function worker(name,color,x,z){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(.65,.78,2.5,10),new THREE.MeshStandardMaterial({color}));
+  body.position.y=1.55; g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.65,12,8),new THREE.MeshStandardMaterial({color:0xf0c4a0}));
+  head.position.y=3.25; g.add(head);
+  const tag=spriteLabel(name,'#111a24'); tag.scale.multiplyScalar(.58); tag.position.y=6; g.add(tag);
+  g.position.set(x,.2,z); scene.add(g);
+  return g;
+}
+
+const agentRoutes = {
+  Reynaldo:[[-98,52],[-86,25],[-36,25],[0,15],[35,25],[86,25],[78,57],[35,76],[0,25]],
+  Moshe:[[-104,50],[-86,25],[-86,-26],[-61,-48],[-36,-26],[0,14]],
+  Victor:[[-95,46],[-86,25],[-86,-26],[-105,-48],[-36,-26],[0,12]]
+};
+[
+  ['Reynaldo',0x2e73d4,-98,52,4.2],
+  ['Moshe',0x8b52bd,-104,50,3.8],
+  ['Victor',0xd17833,-95,46,4.0]
+].forEach(([name,color,x,z,speed],idx)=>{
+  workers.push({name,obj:worker(name,color,x,z),route:agentRoutes[name],t:idx*1.4,speed});
+});
+
+function moveRoute(item,dt){
+  item.t += dt*item.speed/27;
+  const r=item.route, i=Math.floor(item.t)%r.length, j=(i+1)%r.length, f=item.t-Math.floor(item.t);
+  const a=r[i], b=r[j];
+  item.obj.position.x=THREE.MathUtils.lerp(a[0],b[0],f);
+  item.obj.position.z=THREE.MathUtils.lerp(a[1],b[1],f);
+  item.obj.rotation.y=Math.atan2(b[0]-a[0],b[1]-a[1]);
+}
+
+function car(color){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(4.2,1.25,2.2),new THREE.MeshStandardMaterial({color,metalness:.12,roughness:.5}));
+  body.position.y=.8; body.castShadow=true; g.add(body);
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(2.3,.85,1.75),new THREE.MeshStandardMaterial({color:0xb8d9e7,roughness:.3}));
+  roof.position.y=1.65; g.add(roof); scene.add(g); return g;
+}
+const carRoutes=[
+  [[-112,-72],[112,-72],[112,-26],[-112,-26],[-112,-72]],
+  [[-120,25],[120,25],[120,76],[-105,76],[-105,25]],
+  [[-86,-98],[-86,98],[-36,98],[-36,-116],[-86,-98]],
+  [[35,-116],[35,112],[86,112],[86,-90],[35,-116]]
+];
+for(let i=0;i<14;i++){
+  cars.push({obj:car([0xe45a45,0x3486d9,0xe0b638,0xf4f4f4,0x555b67][i%5]),route:carRoutes[i%carRoutes.length],t:i*.64,speed:6.5+(i%4)});
+}
+function movePolyline(item,dt){
+  item.t += dt*item.speed/21;
+  const r=item.route, i=Math.floor(item.t)%r.length, j=(i+1)%r.length, f=item.t-Math.floor(item.t);
+  const a=r[i], b=r[j];
+  item.obj.position.set(THREE.MathUtils.lerp(a[0],b[0],f),.35,THREE.MathUtils.lerp(a[1],b[1],f));
+  item.obj.rotation.y=Math.atan2(b[0]-a[0],b[1]-a[1]);
+}
+
+function unlockAirport(){
+  if(airportUnlocked) return;
+  airportUnlocked=true;
+  airportIsland.top.material=mats.grass2;
+  bridge.visible=true;
+  bridge.scale.x=.02;
+  islandStatus.textContent='Airport Island unlocked ✓';
+  islandStatus.classList.add('unlocked');
+  airportBuilding.userData.description='Airport expansion unlocked. This island can now support logistics, travel and future buildings.';
+  airportBuilding.traverse(o=>{
+    if(o.material && o.material.color && o!==airportBuilding){
+      o.material.color.offsetHSL(0,0,.14);
+    }
+  });
+}
+
+function updateMetrics(dt){
+  revenue += dt*19;
+  profit += dt*7.2;
+  const growth=((revenue-startRevenue)/startRevenue)*100;
+  revenueEl.textContent='$'+Math.floor(revenue).toLocaleString();
+  profitEl.textContent='$'+Math.floor(profit).toLocaleString();
+  growthEl.textContent='+'+growth.toFixed(1)+'%';
+  if(revenue>=10000) unlockAirport();
+  if(airportUnlocked && bridge.scale.x<1) bridge.scale.x=Math.min(1,bridge.scale.x+dt*.75);
+}
+
+function updateLighting(t){
+  let phase=timeMode;
+  if(phase==='AUTO'){
+    const c=(t*.015)%4;
+    phase=c<1.5?'DAY':c<2.3?'DUSK':c<3.2?'NIGHT':'DUSK';
+  }
+  if(phase==='DAY'){scene.background.setHex(0x78cae6);hemi.intensity=2.25;sun.intensity=3.1;renderer.toneMappingExposure=1.05}
+  else if(phase==='DUSK'){scene.background.setHex(0x789ab8);hemi.intensity=1.35;sun.intensity=1.7;renderer.toneMappingExposure=.88}
+  else {scene.background.setHex(0x14243d);hemi.intensity=.55;sun.intensity=.65;renderer.toneMappingExposure=.68}
+}
+
+const rainCount=550;
+const rainArr=new Float32Array(rainCount*3);
+for(let i=0;i<rainCount;i++){rainArr[i*3]=(Math.random()-.5)*360;rainArr[i*3+1]=Math.random()*100+10;rainArr[i*3+2]=(Math.random()-.5)*320}
+const rainGeo=new THREE.BufferGeometry(); rainGeo.setAttribute('position',new THREE.BufferAttribute(rainArr,3));
+const rainMat=new THREE.PointsMaterial({color:0xccefff,size:.55,transparent:true,opacity:0});
+const rain=new THREE.Points(rainGeo,rainMat); scene.add(rain);
+function updateWeather(dt){
+  rainMat.opacity=weatherMode==='RAIN'?.65:0;
+  if(weatherMode==='RAIN'){
+    const p=rainGeo.attributes.position.array;
+    for(let i=0;i<rainCount;i++){p[i*3+1]-=dt*38;if(p[i*3+1]<-5)p[i*3+1]=110}
+    rainGeo.attributes.position.needsUpdate=true;
+  }
+}
+
+const raycaster=new THREE.Raycaster();
+const pointer=new THREE.Vector2();
+let pointerDown={x:0,y:0};
+renderer.domElement.addEventListener('pointerdown',e=>pointerDown={x:e.clientX,y:e.clientY});
+renderer.domElement.addEventListener('pointerup',e=>{
+  if(Math.hypot(e.clientX-pointerDown.x,e.clientY-pointerDown.y)>8) return;
+  const r=renderer.domElement.getBoundingClientRect();
+  pointer.x=((e.clientX-r.left)/r.width)*2-1;
+  pointer.y=-((e.clientY-r.top)/r.height)*2+1;
+  raycaster.setFromCamera(pointer,camera);
+  const hit=raycaster.intersectObjects(clickable,true)[0];
+  if(!hit) return;
+  let obj=hit.object;
+  while(obj.parent && !obj.userData?.name) obj=obj.parent;
+  if(obj.userData?.name){
+    infoTitle.textContent=obj.userData.name;
+    infoText.textContent=obj.userData.description || 'Business World location.';
+    infoCard.classList.add('show');
+  }
+});
+document.getElementById('closeInfo').onclick=()=>infoCard.classList.remove('show');
+
+function cameraTween(position,target){
+  const a=camera.position.clone(), b=controls.target.clone(), start=performance.now(), duration=650;
+  function frame(now){
+    const k=Math.min(1,(now-start)/duration), e=1-Math.pow(1-k,3);
+    camera.position.lerpVectors(a,position,e);
+    controls.target.lerpVectors(b,target,e);
+    if(k<1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+document.getElementById('homeBtn').onclick=()=>cameraTween(new THREE.Vector3(170,145,205),new THREE.Vector3(0,5,0));
+document.getElementById('rotateLeftBtn').onclick=()=>{
+  const v=camera.position.clone().sub(controls.target).applyAxisAngle(new THREE.Vector3(0,1,0),Math.PI/6);
+  camera.position.copy(controls.target).add(v);
+};
+document.getElementById('rotateRightBtn').onclick=()=>{
+  const v=camera.position.clone().sub(controls.target).applyAxisAngle(new THREE.Vector3(0,1,0),-Math.PI/6);
+  camera.position.copy(controls.target).add(v);
+};
+document.getElementById('weatherBtn').onclick=e=>{
+  weatherMode=weatherMode==='CLEAR'?'RAIN':'CLEAR';
+  e.currentTarget.textContent=weatherMode==='CLEAR'?'☀ Clear':'☂ Rain';
+};
+document.getElementById('timeBtn').onclick=e=>{
+  const modes=['AUTO','DAY','DUSK','NIGHT'];
+  timeMode=modes[(modes.indexOf(timeMode)+1)%modes.length];
+  e.currentTarget.textContent='◐ '+(timeMode[0]+timeMode.slice(1).toLowerCase());
+};
+
+const clock=new THREE.Clock();
+let boardTick=0;
+function animate(){
+  const dt=Math.min(.035,clock.getDelta());
+  const t=clock.elapsedTime;
+  controls.update();
+  workers.forEach(w=>moveRoute(w,dt));
+  cars.forEach(c=>movePolyline(c,dt));
+  updateMetrics(dt);
+  updateLighting(t);
+  updateWeather(dt);
+  boardTick+=dt;
+  if(boardTick>.8){boardTick=0;drawBoard()}
+  renderer.render(scene,camera);
+  requestAnimationFrame(animate);
+}
+
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight,false);
+});
+
+loading.style.display='none';
+animate();
