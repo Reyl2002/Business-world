@@ -1902,9 +1902,10 @@ function createCruiseResort(cx,cz){
     palm(px,pz,1.02);
   }
 
+  const southUmbColors=[red,yellow,blue,teal];
   let southUmbrellaIndex=0;
   for(const [ux,uz] of [[-166,292],[-145,306],[-124,300],[-102,315],[-78,300],[-45,289]]){
-    umbrella(ux,uz,umbColors[southUmbrellaIndex%umbColors.length]);
+    umbrella(ux,uz,southUmbColors[southUmbrellaIndex%southUmbColors.length]);
     southUmbrellaIndex++;
   }
 
