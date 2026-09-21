@@ -59,33 +59,114 @@ sun.shadow.camera.top = 310;
 sun.shadow.camera.bottom = -310;
 scene.add(sun);
 
-// Darker animated ocean so the water is clearly separate from the sky.
-const oceanGeo = new THREE.PlaneGeometry(1100, 900, 92, 76);
+// Strong dark-blue animated ocean with clearly visible rolling wave crests.
+const oceanGeo = new THREE.PlaneGeometry(1100, 900, 110, 90);
 oceanGeo.rotateX(-Math.PI/2);
 const oceanBase = Float32Array.from(oceanGeo.attributes.position.array);
 
 const oceanMat = new THREE.MeshPhysicalMaterial({
-  color:0x075b8f,
-  roughness:.24,
-  metalness:.04,
+  color:0x044c7b,
+  roughness:.28,
+  metalness:.03,
   transparent:true,
-  opacity:.97,
-  clearcoat:.7,
-  clearcoatRoughness:.16
+  opacity:.985,
+  clearcoat:.82,
+  clearcoatRoughness:.14
 });
 const ocean = new THREE.Mesh(oceanGeo, oceanMat);
 ocean.position.y = -14;
 ocean.receiveShadow = true;
 scene.add(ocean);
 
-// A darker layer underneath gives the ocean more depth instead of a flat cyan sheet.
+// Dark depth underneath the moving surface.
 const oceanDepth = new THREE.Mesh(
   new THREE.PlaneGeometry(1100,900),
-  new THREE.MeshBasicMaterial({color:0x033c67})
+  new THREE.MeshBasicMaterial({color:0x022f55})
 );
 oceanDepth.rotation.x = -Math.PI/2;
-oceanDepth.position.y = -18.5;
+oceanDepth.position.y = -19.2;
 scene.add(oceanDepth);
+
+// Visible rolling white/cyan wave crests spread across the whole ocean.
+// The land sits above them, so the crests are naturally hidden underneath islands.
+const waveCrests=[];
+const crestMat = new THREE.LineBasicMaterial({
+  color:0x9fe9ff,
+  transparent:true,
+  opacity:.72,
+  depthWrite:false,
+  blending:THREE.AdditiveBlending
+});
+const foamMat = new THREE.LineBasicMaterial({
+  color:0xe6fbff,
+  transparent:true,
+  opacity:.9,
+  depthWrite:false
+});
+
+function makeWaveBand(zBase,phase,amplitude=4.2,width=980,points=90){
+  const pts=[];
+  for(let i=0;i<points;i++){
+    const x=-width/2 + (width*i/(points-1));
+    const z=zBase + Math.sin(x*.025+phase)*amplitude + Math.sin(x*.011-phase*.7)*1.8;
+    pts.push(new THREE.Vector3(x,-12.85,z));
+  }
+  const geo=new THREE.BufferGeometry().setFromPoints(pts);
+  const line=new THREE.Line(geo,crestMat.clone());
+  line.userData={zBase,phase,amplitude,width,points,speed:8+Math.random()*6};
+  scene.add(line);
+  waveCrests.push(line);
+  return line;
+}
+
+for(let z=-390,idx=0;z<=390;z+=34,idx++){
+  makeWaveBand(z,idx*.72,3.4+(idx%3)*.8,1000,96);
+}
+
+// A second angled family makes the water look active from every camera angle.
+const diagonalWaves=[];
+function makeDiagonalWave(offset,phase){
+  const pts=[];
+  const count=78;
+  for(let i=0;i<count;i++){
+    const x=-500 + 1000*i/(count-1);
+    const z=offset + x*.18 + Math.sin(x*.02+phase)*3.1;
+    pts.push(new THREE.Vector3(x,-12.92,z));
+  }
+  const geo=new THREE.BufferGeometry().setFromPoints(pts);
+  const line=new THREE.Line(geo,new THREE.LineBasicMaterial({
+    color:0x5dcff5,
+    transparent:true,
+    opacity:.34,
+    depthWrite:false,
+    blending:THREE.AdditiveBlending
+  }));
+  line.userData={offset,phase,speed:5+Math.random()*4};
+  scene.add(line);
+  diagonalWaves.push(line);
+}
+for(let z=-420,i=0;z<=420;z+=62,i++) makeDiagonalWave(z,i*.63);
+
+// Shoreline foam rings: these sit just above the ocean and pulse around each island.
+const shoreFoam=[];
+function createShoreFoam(points,scale=1.035){
+  const cx=points.reduce((s,p)=>s+p[0],0)/points.length;
+  const cz=points.reduce((s,p)=>s+p[1],0)/points.length;
+  const expanded=points.map(([x,z])=>new THREE.Vector3(
+    cx+(x-cx)*scale,
+    -12.62,
+    cz+(z-cz)*scale
+  ));
+  expanded.push(expanded[0].clone());
+  const line=new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(expanded),
+    foamMat.clone()
+  );
+  line.userData={phase:Math.random()*Math.PI*2};
+  scene.add(line);
+  shoreFoam.push(line);
+  return line;
+}
 
 let oceanNormalTick=0;
 function updateOcean(t){
@@ -94,17 +175,55 @@ function updateOcean(t){
   for(let i=0;i<pos.count;i++){
     const x=oceanBase[i*3];
     const z=oceanBase[i*3+2];
-    const wave1=Math.sin(x*.018+t*1.15)*.72;
-    const wave2=Math.sin(z*.024-t*.82)*.48;
-    const wave3=Math.sin((x+z)*.012+t*.58)*.28;
+    const wave1=Math.sin(x*.021+t*1.45)*1.35;
+    const wave2=Math.sin(z*.029-t*1.08)*.95;
+    const wave3=Math.sin((x+z)*.015+t*.78)*.55;
     a[i*3+1]=oceanBase[i*3+1]+wave1+wave2+wave3;
   }
   pos.needsUpdate=true;
 
-  // Refresh reflections periodically without making mobile performance too heavy.
   oceanNormalTick++;
-  if(oceanNormalTick%6===0) oceanGeo.computeVertexNormals();
+  if(oceanNormalTick%5===0) oceanGeo.computeVertexNormals();
+
+  // Move and reshape the bright wave crests so motion is obvious even from far away.
+  for(const line of waveCrests){
+    const d=line.userData;
+    const p=line.geometry.attributes.position.array;
+    const drift=(t*d.speed)%820;
+    let z=d.zBase+drift;
+    while(z>410) z-=820;
+    for(let i=0;i<d.points;i++){
+      const x=-d.width/2 + d.width*i/(d.points-1);
+      p[i*3]=x;
+      p[i*3+1]=-12.72 + Math.sin(x*.019+t*1.7+d.phase)*.28;
+      p[i*3+2]=z + Math.sin(x*.025+t*.95+d.phase)*d.amplitude + Math.sin(x*.011-t*.55)*1.8;
+    }
+    line.geometry.attributes.position.needsUpdate=true;
+    line.material.opacity=.58 + .24*(.5+.5*Math.sin(t*1.2+d.phase));
+  }
+
+  for(const line of diagonalWaves){
+    const d=line.userData;
+    const p=line.geometry.attributes.position.array;
+    const drift=(t*d.speed)%900;
+    let off=d.offset+drift;
+    while(off>450) off-=900;
+    const count=p.length/3;
+    for(let i=0;i<count;i++){
+      const x=-500+1000*i/(count-1);
+      p[i*3]=x;
+      p[i*3+1]=-12.80;
+      p[i*3+2]=off+x*.18+Math.sin(x*.02+t*.8+d.phase)*3.1;
+    }
+    line.geometry.attributes.position.needsUpdate=true;
+  }
+
+  shoreFoam.forEach((line,i)=>{
+    line.material.opacity=.62+.32*(.5+.5*Math.sin(t*2.1+i));
+    line.scale.setScalar(1+.008*Math.sin(t*1.5+i));
+  });
 }
+
 
 const mats = {
   grass:new THREE.MeshStandardMaterial({color:0x73b959, roughness:.95}),
@@ -230,6 +349,10 @@ const mainPoints = [
   [145,25],[127,76],[91,113],[39,134],[-24,137],[-81,127],[-124,100],[-147,55],[-154,3],[-150,-46]
 ];
 const airportPoints = [[154,-98],[186,-112],[226,-106],[263,-84],[278,-48],[273,-10],[248,20],[209,31],[174,23],[148,2],[139,-41]];
+
+createShoreFoam(mainPoints,1.055);
+createShoreFoam(mainPoints,1.09);
+createShoreFoam(airportPoints,1.06);
 
 island(mainPoints, mats.grass, 17);
 const airportIsland = island(airportPoints, mats.locked, 18);
