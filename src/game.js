@@ -1387,6 +1387,23 @@ makeLockedProgressBridge({
 road(35,transitZ(-214),35,transitZ(-245),11);
 road(-28,transitZ(-245),98,transitZ(-245),11);
 
+// THIRD BRIDGE: Cruise Island <-> Transit District.
+// This completes the triangle so the main island, Cruise Island and Transit District
+// all have a direct bridge connection to one another.
+// Cruise-side approach ties into the existing resort road grid.
+road(-225,-235,-225,-260,11);
+road(-225,-260,-146,-274,11);
+
+// Transit-side landing ties directly into the district's lower boulevard.
+road(-92,transitZ(-232),-92,transitZ(-218),11);
+
+makeLockedProgressBridge({
+  ax:-146,az:-274,
+  bx:-92,bz:transitZ(-218),
+  target:'cruise',
+  labelText:'LOCKED · $50K'
+});
+
 function updateProgressionBridges(dt){
   progressionBridges.forEach(link=>{
     const unlocked=link.target==='transit'?transitUnlocked:cruiseUnlocked;
