@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#0b2d47" />
+  <title>Business World</title>
+  <link rel="stylesheet" href="./src/styles.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="game" aria-label="Business World 3D city simulation"></canvas>
+
+  <div id="loading">
+    <div class="loading-card">
+      <h1>Business World</h1>
+      <p>Building the city...</p>
+      <div class="loading-bar"><i></i></div>
+    </div>
+  </div>
+
+  <main id="hud">
+    <section class="top-left">
+      <div class="brand-card">
+        <strong>BUSINESS WORLD</strong>
+        <span>BUILD · MANAGE · GROW</span>
+      </div>
+
+      <div class="controls">
+        <button id="homeBtn">⌂ Home</button>
+        <button id="rotateLeftBtn">↶</button>
+        <button id="rotateRightBtn">↷</button>
+        <button id="weatherBtn">☀ Clear</button>
+        <button id="timeBtn">◐ Auto</button>
+      </div>
+    </section>
+
+    <section class="stats-card">
+      <div class="eyebrow">CITY PERFORMANCE</div>
+      <div class="metric"><span>Revenue</span><b id="revenue">$7,500</b></div>
+      <div class="metric"><span>Profit</span><b id="profit">$2,650</b></div>
+      <div class="metric"><span>Growth</span><b id="growth">+0.0%</b></div>
+      <div id="islandStatus" class="unlock-status">Airport Island locked · $10,000 revenue</div>
+    </section>
+
+    <section id="infoCard" class="info-card">
+      <button id="closeInfo" class="close">×</button>
+      <h2 id="infoTitle"></h2>
+      <p id="infoText"></p>
+    </section>
+
+    <div class="bottom-hint">Drag to rotate · Two fingers/right-drag to pan · Pinch/wheel to zoom · Tap buildings</div>
+  </main>
+
+  <script type="module" src="./src/game.js"></script>
+</body>
+</html>
