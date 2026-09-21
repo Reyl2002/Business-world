@@ -56,6 +56,72 @@
       <p id="infoText"></p>
     </section>
 
+    <section id="bankPanel" class="bank-panel" aria-hidden="true">
+      <div class="bank-header">
+        <div>
+          <div class="bank-kicker">BW FINANCIAL CENTER</div>
+          <h2>Bank & Goals</h2>
+          <p>Track personal bills, business numbers, margins, and the path to your goals.</p>
+        </div>
+        <button id="closeBank" class="bank-close" type="button" aria-label="Close bank">×</button>
+      </div>
+
+      <div class="bank-summary">
+        <article><span>Business Profit</span><strong id="bankBusinessProfit">$0</strong><small id="bankBusinessMargin">0% margin</small></article>
+        <article><span>Personal Free Cash</span><strong id="bankPersonalFree">$0</strong><small>after monthly bills</small></article>
+        <article><span>Monthly Bills</span><strong id="bankBillsTotal">$0</strong><small>personal + business</small></article>
+        <article><span>Goal Progress</span><strong id="bankGoalProgress">0%</strong><small>across active goals</small></article>
+      </div>
+
+      <div class="bank-grid">
+        <section class="bank-card bank-numbers">
+          <h3>Monthly Numbers</h3>
+          <div class="bank-fields">
+            <label>Business revenue<input id="bankBusinessRevenue" type="number" min="0" step="100" inputmode="decimal" placeholder="0"></label>
+            <label>Business other expenses<input id="bankBusinessExpenses" type="number" min="0" step="50" inputmode="decimal" placeholder="0"></label>
+            <label>Personal income<input id="bankPersonalIncome" type="number" min="0" step="100" inputmode="decimal" placeholder="0"></label>
+            <label>Personal other expenses<input id="bankPersonalExpenses" type="number" min="0" step="50" inputmode="decimal" placeholder="0"></label>
+          </div>
+          <p class="bank-note">These numbers stay saved on this device so the player can return to their plan later.</p>
+        </section>
+
+        <section class="bank-card">
+          <h3>Add a Bill</h3>
+          <form id="bankBillForm" class="bank-form">
+            <input id="bankBillName" required maxlength="40" placeholder="Rent, software, insurance...">
+            <input id="bankBillAmount" required type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="Monthly amount">
+            <select id="bankBillType">
+              <option value="personal">Personal</option>
+              <option value="business">Business</option>
+            </select>
+            <button type="submit">+ Add Bill</button>
+          </form>
+          <div id="bankBillsList" class="bank-list"></div>
+        </section>
+
+        <section class="bank-card">
+          <h3>Add a Goal</h3>
+          <form id="bankGoalForm" class="bank-form bank-goal-form">
+            <input id="bankGoalName" required maxlength="48" placeholder="Emergency fund, equipment, expansion...">
+            <select id="bankGoalType">
+              <option value="personal">Personal</option>
+              <option value="business">Business</option>
+            </select>
+            <input id="bankGoalTarget" required type="number" min="1" step="1" inputmode="decimal" placeholder="Target">
+            <input id="bankGoalCurrent" type="number" min="0" step="1" inputmode="decimal" placeholder="Already saved">
+            <input id="bankGoalMonthly" type="number" min="0" step="1" inputmode="decimal" placeholder="Monthly contribution">
+            <button type="submit">+ Add Goal</button>
+          </form>
+          <div id="bankGoalsList" class="bank-list"></div>
+        </section>
+
+        <section class="bank-card bank-strategy-card">
+          <h3>Strategy</h3>
+          <div id="bankStrategies" class="bank-strategies"></div>
+        </section>
+      </div>
+    </section>
+
     <div class="bottom-hint">One finger/left-drag to move · Rotate buttons/right-drag to rotate · Pinch/wheel to zoom · Tap buildings</div>
   </main>
 
