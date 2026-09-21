@@ -36,8 +36,16 @@ controls.maxDistance = 440;
 controls.minPolarAngle = Math.PI * 0.17;
 controls.maxPolarAngle = Math.PI * 0.49;
 controls.screenSpacePanning = true;
-controls.touches.ONE = THREE.TOUCH.ROTATE;
-controls.touches.TWO = THREE.TOUCH.DOLLY_PAN;
+controls.enablePan = true;
+controls.panSpeed = 1.15;
+// Free-map navigation: one finger / left mouse moves across the city.
+// Rotation stays available with the on-screen rotate buttons, right mouse,
+// or a two-finger gesture.
+controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
+controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
+controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
+controls.touches.ONE = THREE.TOUCH.PAN;
+controls.touches.TWO = THREE.TOUCH.DOLLY_ROTATE;
 
 const hemi = new THREE.HemisphereLight(0xcdf4ff, 0x4a653a, 2.25);
 scene.add(hemi);
@@ -171,10 +179,47 @@ function spriteLabel(text,bg='#143e62'){
   return s;
 }
 
-function building({name,x,z,w=22,d=18,h=22,color=0x7fadd3,accent=0x315c7b,description=''}) {
+
+// BUILDABLE SQUARE LOTS
+// These restore the older "one building per square" city-builder layout.
+// Every building sits on a visible square plot, which also gives us a clean
+// snap grid for future placement/move tools.
+const lotMaterial = new THREE.MeshStandardMaterial({color:0x8fd46e,roughness:1});
+const lotBorderMaterial = new THREE.MeshStandardMaterial({color:0xe9e5d8,roughness:1});
+
+function createLotBase(x,z,size=34){
+  const lot = new THREE.Group();
+  lot.position.set(x,.11,z);
+
+  const tile = new THREE.Mesh(new THREE.BoxGeometry(size,.18,size),lotMaterial);
+  tile.receiveShadow = true;
+  lot.add(tile);
+
+  const edge=.55, y=.18;
+  const top=new THREE.Mesh(new THREE.BoxGeometry(size+.7,.18,edge),lotBorderMaterial);
+  top.position.set(0,y,-size/2);
+  const bottom=top.clone(); bottom.position.z=size/2;
+  const left=new THREE.Mesh(new THREE.BoxGeometry(edge,.18,size+.7),lotBorderMaterial);
+  left.position.set(-size/2,y,0);
+  const right=left.clone(); right.position.x=size/2;
+  lot.add(top,bottom,left,right);
+
+  // subtle four-corner markers make the square placement system readable
+  for(const [cx,cz] of [[-1,-1],[1,-1],[-1,1],[1,1]]){
+    const marker=new THREE.Mesh(new THREE.BoxGeometry(1.15,.24,1.15),lotBorderMaterial);
+    marker.position.set(cx*(size/2-1),.24,cz*(size/2-1));
+    lot.add(marker);
+  }
+
+  scene.add(lot);
+  return lot;
+}
+
+function building({name,x,z,w=22,d=18,h=22,color=0x7fadd3,accent=0x315c7b,description='',lotSize=34}) {
+  createLotBase(x,z,lotSize);
   const g=new THREE.Group();
   g.position.set(x,.25,z);
-  g.userData={name,description};
+  g.userData={name,description,gridLot:true,lotSize};
 
   const pad=new THREE.Mesh(new THREE.BoxGeometry(w+3,.55,d+3),mats.sidewalk);
   pad.position.y=.3; g.add(pad);
@@ -208,6 +253,7 @@ function building({name,x,z,w=22,d=18,h=22,color=0x7fadd3,accent=0x315c7b,descri
 }
 
 function createThinkHub(x,z){
+  createLotBase(x,z,40);
   const g=new THREE.Group();
   g.position.set(x,.25,z);
   g.userData={
@@ -317,8 +363,8 @@ const destinations = [
   building({name:'BW Headquarters',x:-4,z:-96,w:28,d:24,h:43,color:0x4f91cb,accent:0x2f5878,description:'Central headquarters for Business World operations.'}),
   createThinkHub(58,-48),
   building({name:'Apartments',x:-104,z:51,w:24,d:21,h:30,color:0xdf9974,accent:0x865a47,description:'Home base for workers and residents.'}),
-  building({name:'Cafe',x:-31,z:56,w:25,d:21,h:15,color:0xd99661,accent:0x764b39,description:'Social space where agents can idle, meet and recharge.'}),
-  building({name:'Market',x:25,z:57,w:25,d:21,h:16,color:0xe5ad65,accent:0x287b5f,description:'Supplies and local commerce.'}),
+  building({name:'Cafe',x:-61,z:51,w:25,d:21,h:15,color:0xd99661,accent:0x764b39,description:'Social space where agents can idle, meet and recharge.'}),
+  building({name:'Market',x:0,z:51,w:25,d:21,h:16,color:0xe5ad65,accent:0x287b5f,description:'Supplies and local commerce.'}),
   building({name:'School',x:108,z:53,w:28,d:22,h:20,color:0xd98262,accent:0xa64f3b,description:'Community learning and worker development.'}),
 ];
 
@@ -549,6 +595,10 @@ function animate(){
   const dt=Math.min(.035,clock.getDelta());
   const t=clock.elapsedTime;
   controls.update();
+  // Keep free panning usable without letting the camera get permanently lost.
+  controls.target.x = THREE.MathUtils.clamp(controls.target.x,-185,300);
+  controls.target.z = THREE.MathUtils.clamp(controls.target.z,-175,165);
+  controls.target.y = THREE.MathUtils.clamp(controls.target.y,0,45);
   workers.forEach(w=>moveRoute(w,dt));
   cars.forEach(c=>movePolyline(c,dt));
   updateMetrics(dt);
