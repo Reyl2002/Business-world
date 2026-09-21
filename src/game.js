@@ -348,7 +348,7 @@ const mainPoints = [
   [-142,-83],[-118,-119],[-68,-139],[-12,-144],[50,-140],[105,-121],[137,-82],[151,-30],
   [145,25],[127,76],[91,113],[39,134],[-24,137],[-81,127],[-124,100],[-147,55],[-154,3],[-150,-46]
 ];
-const airportPoints = [[154,-98],[186,-112],[226,-106],[263,-84],[278,-48],[273,-10],[248,20],[209,31],[174,23],[148,2],[139,-41]];
+const airportPoints = [[142,-128],[186,-153],[246,-158],[305,-145],[344,-111],[356,-62],[350,-12],[326,34],[286,68],[230,79],[181,66],[146,38],[126,-5],[124,-58]];
 
 createShoreFoam(mainPoints,1.055);
 createShoreFoam(mainPoints,1.09);
@@ -393,8 +393,10 @@ function road(ax,az,bx,bz,width=10,bridge=false){
 
 const bridge = road(108,-72,164,-58,11,true);
 bridge.visible = false;
-road(164,-58,226,-58,11);
-road(190,-94,190,-10,11);
+road(164,-58,310,-58,11);
+road(190,-120,190,44,11);
+road(258,-120,258,48,11);
+road(310,-105,310,38,11);
 
 function spriteLabel(text,bg='#143e62'){
   const c=document.createElement('canvas'); c.width=512; c.height=160;
@@ -449,42 +451,280 @@ function createLotBase(x,z,cols=3,rows=cols){
   return lot;
 }
 
-function building({name,x,z,w=22,d=18,h=22,color=0x7fadd3,accent=0x315c7b,description='',footprint=3,footprintZ=footprint}) {
+function building({name,x,z,w=22,d=18,h=22,color=0x7fadd3,accent=0x315c7b,description='',footprint=3,footprintZ=footprint,style='office'}) {
   createLotBase(x,z,footprint,footprintZ);
   const g=new THREE.Group();
   g.position.set(x,.25,z);
-  g.userData={name,description,gridLot:true,footprint,footprintZ};
+  g.userData={name,description,gridLot:true,footprint,footprintZ,style};
 
-  const pad=new THREE.Mesh(new THREE.BoxGeometry(w+3,.55,d+3),mats.sidewalk);
-  pad.position.y=.3; g.add(pad);
+  const bodyMat=new THREE.MeshStandardMaterial({color,roughness:.58});
+  const accentMat=new THREE.MeshStandardMaterial({color:accent,roughness:.48,metalness:.05});
+  const trimMat=new THREE.MeshStandardMaterial({color:0xf2efe6,roughness:.55});
+  const darkMat=new THREE.MeshStandardMaterial({color:0x26333c,roughness:.5});
+  const glassMat=new THREE.MeshPhysicalMaterial({
+    color:0x80d8f1,roughness:.15,transparent:true,opacity:.84,transmission:.1,clearcoat:.4
+  });
+  const warmMat=new THREE.MeshStandardMaterial({
+    color:0xffd76c,emissive:0xb06b00,emissiveIntensity:.55,roughness:.35
+  });
+  const greenMat=new THREE.MeshStandardMaterial({color:0x4f9c52,roughness:1});
 
-  const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,roughness:.72}));
-  body.position.y=h/2+.6; body.castShadow=true; body.receiveShadow=true; g.add(body);
+  const pad=new THREE.Mesh(new THREE.BoxGeometry(w+5,.7,d+5),trimMat);
+  pad.position.y=.35;
+  pad.receiveShadow=true;
+  g.add(pad);
 
-  const roof=new THREE.Mesh(new THREE.BoxGeometry(w+1,.9,d+1),new THREE.MeshStandardMaterial({color:accent,roughness:.7}));
-  roof.position.y=h+1; g.add(roof);
+  // Lower podium makes every building read as a premium game asset instead of a plain box.
+  const podium=new THREE.Mesh(new THREE.BoxGeometry(w+1.4,2.3,d+1.4),accentMat);
+  podium.position.y=1.5;
+  podium.castShadow=true;
+  g.add(podium);
 
-  const windows=new THREE.MeshStandardMaterial({color:0x8edcf4,emissive:0x1e5b76,emissiveIntensity:.45,roughness:.3});
-  const cols=Math.max(3,Math.floor(w/5));
-  const rows=Math.max(3,Math.floor(h/5));
+  const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),bodyMat);
+  body.position.y=h/2+2.5;
+  body.castShadow=true;
+  body.receiveShadow=true;
+  g.add(body);
+
+  // Front glass entrance and canopy.
+  const entranceW=Math.min(8,w*.38);
+  const entrance=new THREE.Mesh(new THREE.BoxGeometry(entranceW,6,.38),glassMat);
+  entrance.position.set(0,5.2,d/2+.22);
+  g.add(entrance);
+
+  const canopy=new THREE.Mesh(new THREE.BoxGeometry(entranceW+2,.8,3.3),accentMat);
+  canopy.position.set(0,8.1,d/2+1.4);
+  canopy.castShadow=true;
+  g.add(canopy);
+
+  // Corner fins make silhouettes more interesting from isometric angles.
+  for(const sx of [-1,1]){
+    const fin=new THREE.Mesh(new THREE.BoxGeometry(.75,h+1,1.1),accentMat);
+    fin.position.set(sx*(w/2-.65),h/2+2.6,d/2+.35);
+    g.add(fin);
+  }
+
+  // Windows on front and side faces.
+  const windowMat=new THREE.MeshStandardMaterial({
+    color:0x86ddf6,emissive:0x174f68,emissiveIntensity:.52,roughness:.24
+  });
+  const cols=Math.max(3,Math.floor(w/4.7));
+  const rows=Math.max(2,Math.floor(h/5));
   for(let r=0;r<rows;r++){
-    for(let c=0;c<cols;c++){
-      const wx=-w/2+2+(c*(w-4)/(cols-1));
-      const wy=3+r*((h-5)/Math.max(1,rows-1));
-      const win=new THREE.Mesh(new THREE.BoxGeometry(1.6,1.5,.13),windows);
-      win.position.set(wx,wy,d/2+.08); g.add(win);
+    const wy=5+r*((h-7)/Math.max(1,rows-1));
+    for(let cc=0;cc<cols;cc++){
+      const wx=-w/2+2.1+(cc*(w-4.2)/Math.max(1,cols-1));
+      if(Math.abs(wx)<entranceW*.52 && wy<10) continue;
+      const win=new THREE.Mesh(new THREE.BoxGeometry(1.8,1.65,.18),windowMat);
+      win.position.set(wx,wy,d/2+.11);
+      g.add(win);
+    }
+    const sideCols=Math.max(2,Math.floor(d/5.5));
+    for(let cc=0;cc<sideCols;cc++){
+      const wz=-d/2+2.1+(cc*(d-4.2)/Math.max(1,sideCols-1));
+      const win=new THREE.Mesh(new THREE.BoxGeometry(.18,1.65,1.8),windowMat);
+      win.position.set(w/2+.11,wy,wz);
+      g.add(win);
     }
   }
 
+  // Roof slab + rooftop crown.
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(w+1.5,.9,d+1.5),accentMat);
+  roof.position.y=h+3.0;
+  roof.castShadow=true;
+  g.add(roof);
+
+  const crown=new THREE.Mesh(new THREE.BoxGeometry(Math.max(7,w*.42),2.2,Math.max(6,d*.42)),darkMat);
+  crown.position.y=h+4.4;
+  g.add(crown);
+
+  // Landscaping at the entrance.
+  for(const sx of [-1,1]){
+    const planter=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.1,2.2),trimMat);
+    planter.position.set(sx*(entranceW/2+2.2),1.1,d/2+2.3);
+    g.add(planter);
+    const shrub=new THREE.Mesh(new THREE.IcosahedronGeometry(1.45,1),greenMat);
+    shrub.position.set(sx*(entranceW/2+2.2),2.5,d/2+2.3);
+    shrub.castShadow=true;
+    g.add(shrub);
+  }
+
+  // Building-specific architecture.
+  if(style==='marketing'){
+    const billboard=new THREE.Mesh(new THREE.BoxGeometry(w*.62,6,.7),darkMat);
+    billboard.position.set(0,h+7,-1.5);
+    g.add(billboard);
+    const glowA=new THREE.Mesh(new THREE.BoxGeometry(w*.5,.55,.78),warmMat);
+    glowA.position.set(0,h+7,-1.08);
+    g.add(glowA);
+    for(const sx of [-1,1]){
+      const banner=new THREE.Mesh(new THREE.BoxGeometry(2.0,h*.55,.55),new THREE.MeshStandardMaterial({color:sx<0?0xf07b67:0xf2c34f,roughness:.45}));
+      banner.position.set(sx*(w/2+.45),h*.58+2.5,d*.15);
+      g.add(banner);
+    }
+  } else if(style==='accounting'){
+    const atrium=new THREE.Mesh(new THREE.CylinderGeometry(5.2,5.2,h*.56,20),glassMat);
+    atrium.position.set(0,h*.44+2.4,d/2+1.4);
+    g.add(atrium);
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(4.7,.45,10,28),warmMat);
+    ring.rotation.x=Math.PI/2;
+    ring.position.set(0,h+5,0);
+    g.add(ring);
+  } else if(style==='hq'){
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(w*.72,h*.38,d*.72),accentMat);
+    upper.position.set(0,h+2+h*.19,0);
+    upper.castShadow=true;
+    g.add(upper);
+    const glassTop=new THREE.Mesh(new THREE.BoxGeometry(w*.54,h*.22,d*.54),glassMat);
+    glassTop.position.set(0,h+4+h*.49,0);
+    g.add(glassTop);
+    const beacon=new THREE.PointLight(0x8cdcff,2.4,50,2);
+    beacon.position.set(0,h+13,0);
+    g.add(beacon);
+  } else if(style==='apartments'){
+    for(let floor=0;floor<Math.max(3,Math.floor(h/6));floor++){
+      const y=5.5+floor*5.2;
+      for(const sx of [-1,1]){
+        const balcony=new THREE.Mesh(new THREE.BoxGeometry(w*.36,.45,2.1),trimMat);
+        balcony.position.set(sx*w*.25,y,d/2+1.15);
+        g.add(balcony);
+      }
+    }
+    const pergola=new THREE.Mesh(new THREE.BoxGeometry(w*.6,.55,d*.45),trimMat);
+    pergola.position.y=h+5.1;
+    g.add(pergola);
+  } else if(style==='cafe'){
+    const awning=new THREE.Mesh(new THREE.BoxGeometry(w*.72,.7,4.2),new THREE.MeshStandardMaterial({color:0x8a4f3e,roughness:.5}));
+    awning.position.set(0,7.1,d/2+1.8);
+    g.add(awning);
+    for(const sx of [-5,0,5]){
+      const table=new THREE.Mesh(new THREE.CylinderGeometry(1.2,1.2,.35,16),trimMat);
+      table.position.set(sx,1.2,d/2+5.2);
+      g.add(table);
+    }
+    const cup=new THREE.Mesh(new THREE.TorusGeometry(2.1,.45,12,24,Math.PI*1.55),warmMat);
+    cup.rotation.z=Math.PI*.18;
+    cup.position.set(0,h+6,0);
+    g.add(cup);
+  } else if(style==='market'){
+    const canopy2=new THREE.Mesh(new THREE.BoxGeometry(w*.84,1.1,d*.72),new THREE.MeshStandardMaterial({color:0x3b8a67,roughness:.5}));
+    canopy2.position.y=h+4.7;
+    g.add(canopy2);
+    for(const sx of [-1,1]){
+      const skylight=new THREE.Mesh(new THREE.BoxGeometry(w*.26,.5,d*.42),glassMat);
+      skylight.rotation.z=sx*.12;
+      skylight.position.set(sx*w*.22,h+5.7,0);
+      g.add(skylight);
+    }
+  } else if(style==='school'){
+    const wingL=new THREE.Mesh(new THREE.BoxGeometry(w*.35,h*.58,d*.8),bodyMat);
+    wingL.position.set(-w*.48,h*.29+2.4,0);
+    wingL.castShadow=true;
+    g.add(wingL);
+    const wingR=wingL.clone();
+    wingR.position.x=w*.48;
+    g.add(wingR);
+    const tower=new THREE.Mesh(new THREE.BoxGeometry(7,h*.65,7),accentMat);
+    tower.position.set(0,h*.6+2.3,-1);
+    g.add(tower);
+    const clock=new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.6,.25,24),trimMat);
+    clock.rotation.x=Math.PI/2;
+    clock.position.set(0,h*.74+2.3,d/2+.2);
+    g.add(clock);
+  }
+
   const sign=spriteLabel(name);
-  sign.position.set(0,h*.7,d/2+.8);
-  sign.scale.multiplyScalar(Math.min(1.15,Math.max(.72,w/24)));
+  sign.position.set(0,h*.67+2,d/2+1.15);
+  sign.scale.multiplyScalar(Math.min(1.12,Math.max(.7,w/25)));
   g.add(sign);
 
   scene.add(g);
   clickable.push(g);
   return g;
 }
+
+function createAirportTerminal(x,z){
+  createLotBase(x,z,6,5);
+  const g=new THREE.Group();
+  g.position.set(x,.25,z);
+  g.userData={
+    name:'Airport',
+    description:'Business World International Airport. Expansion hub for travel, logistics and future districts.',
+    gridLot:true,footprint:6,footprintZ:5,style:'airport'
+  };
+
+  const white=new THREE.MeshStandardMaterial({color:0xeeeae1,roughness:.55});
+  const dark=new THREE.MeshStandardMaterial({color:0x26343f,roughness:.48});
+  const blue=new THREE.MeshStandardMaterial({color:0x3b78a5,roughness:.45});
+  const glass=new THREE.MeshPhysicalMaterial({color:0x7ed7f0,roughness:.12,transparent:true,opacity:.82,transmission:.12,clearcoat:.5});
+  const silver=new THREE.MeshStandardMaterial({color:0xbfc8cc,roughness:.3,metalness:.28});
+  const green=new THREE.MeshStandardMaterial({color:0x4f9d55,roughness:1});
+
+  const pad=new THREE.Mesh(new THREE.BoxGeometry(72,.7,57),white);
+  pad.position.y=.35; g.add(pad);
+
+  const terminal=new THREE.Mesh(new THREE.BoxGeometry(54,14,30),white);
+  terminal.position.set(0,8,0);
+  terminal.castShadow=true; g.add(terminal);
+
+  const frontGlass=new THREE.Mesh(new THREE.BoxGeometry(42,9,.5),glass);
+  frontGlass.position.set(0,8.5,15.25); g.add(frontGlass);
+
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(58,1.1,34),dark);
+  roof.position.y=15.5; g.add(roof);
+
+  // Arched roof ribs.
+  for(const sx of [-18,-9,0,9,18]){
+    const rib=new THREE.Mesh(new THREE.TorusGeometry(7.8,.42,10,28,Math.PI),silver);
+    rib.rotation.z=Math.PI/2;
+    rib.rotation.y=Math.PI/2;
+    rib.position.set(sx,17.1,0);
+    g.add(rib);
+  }
+
+  // Control tower.
+  const towerBase=new THREE.Mesh(new THREE.CylinderGeometry(3.2,4.2,18,16),silver);
+  towerBase.position.set(22,24,-7); g.add(towerBase);
+  const towerCab=new THREE.Mesh(new THREE.CylinderGeometry(6.2,5.4,5.5,16),glass);
+  towerCab.position.set(22,35,-7); g.add(towerCab);
+  const towerRoof=new THREE.Mesh(new THREE.CylinderGeometry(6.6,6.6,.8,16),dark);
+  towerRoof.position.set(22,38.1,-7); g.add(towerRoof);
+
+  // Entrance canopy.
+  const canopy=new THREE.Mesh(new THREE.BoxGeometry(30,1.0,5),blue);
+  canopy.position.set(-5,7.3,18); g.add(canopy);
+
+  // Jet-bridge style side arms.
+  for(const sx of [-16,0,16]){
+    const bridgeArm=new THREE.Mesh(new THREE.BoxGeometry(9,3.4,4.2),silver);
+    bridgeArm.position.set(sx,5.2,-17.5);
+    g.add(bridgeArm);
+  }
+
+  // Roof lights and landscaping.
+  for(const sx of [-24,-12,0,12,24]){
+    const light=new THREE.PointLight(0x8edfff,1.2,24,2);
+    light.position.set(sx,18,6);
+    g.add(light);
+  }
+  for(const sx of [-28,28]){
+    for(const zz of [18,24]){
+      const shrub=new THREE.Mesh(new THREE.IcosahedronGeometry(1.7,1),green);
+      shrub.position.set(sx,2.2,zz);
+      g.add(shrub);
+    }
+  }
+
+  const sign=spriteLabel('BW INTERNATIONAL AIRPORT','#173d59');
+  sign.scale.multiplyScalar(.75);
+  sign.position.set(-4,10.7,16.2);
+  g.add(sign);
+
+  scene.add(g);
+  clickable.push(g);
+  return g;
+}
+
 
 function createThinkHub(x,z){
   createLotBase(x,z,5,5);
@@ -595,25 +835,36 @@ function createThinkHub(x,z){
 }
 
 const destinations = [
-  building({name:'Marketing Studio',footprint:3,x:-105,z:-48,w:25,d:20,h:24,color:0xdb7168,accent:0x813856,description:'Marketing content, social campaigns and brand growth.'}),
-  building({name:'Accounting Hub',footprint:3,x:-61,z:-48,w:24,d:20,h:28,color:0x609ed5,accent:0x2d5d93,description:'Invoices, bookkeeping, revenue, profit and forecasting.'}),
-  building({name:'BW Headquarters',footprint:4,x:-4,z:-96,w:28,d:24,h:43,color:0x4f91cb,accent:0x2f5878,description:'Central headquarters for Business World operations.'}),
+  building({name:'Marketing Studio',style:'marketing',footprint:3,x:-105,z:-48,w:25,d:20,h:24,color:0xdb7168,accent:0x813856,description:'Marketing content, social campaigns and brand growth.'}),
+  building({name:'Accounting Hub',style:'accounting',footprint:3,x:-61,z:-48,w:24,d:20,h:28,color:0x609ed5,accent:0x2d5d93,description:'Invoices, bookkeeping, revenue, profit and forecasting.'}),
+  building({name:'BW Headquarters',style:'hq',footprint:4,x:-4,z:-96,w:28,d:24,h:43,color:0x4f91cb,accent:0x2f5878,description:'Central headquarters for Business World operations.'}),
   createThinkHub(58,-48),
-  building({name:'Apartments',footprint:3,x:-104,z:51,w:24,d:21,h:30,color:0xdf9974,accent:0x865a47,description:'Home base for workers and residents.'}),
-  building({name:'Cafe',footprint:2,x:-61,z:51,w:25,d:21,h:15,color:0xd99661,accent:0x764b39,description:'Social space where agents can idle, meet and recharge.'}),
-  building({name:'Market',footprint:2,x:0,z:51,w:25,d:21,h:16,color:0xe5ad65,accent:0x287b5f,description:'Supplies and local commerce.'}),
-  building({name:'School',footprint:3,x:108,z:53,w:28,d:22,h:20,color:0xd98262,accent:0xa64f3b,description:'Community learning and worker development.'}),
+  building({name:'Apartments',style:'apartments',footprint:3,x:-104,z:51,w:24,d:21,h:30,color:0xdf9974,accent:0x865a47,description:'Home base for workers and residents.'}),
+  building({name:'Cafe',style:'cafe',footprint:2,x:-61,z:51,w:25,d:21,h:15,color:0xd99661,accent:0x764b39,description:'Social space where agents can idle, meet and recharge.'}),
+  building({name:'Market',style:'market',footprint:2,x:0,z:51,w:25,d:21,h:16,color:0xe5ad65,accent:0x287b5f,description:'Supplies and local commerce.'}),
+  building({name:'School',style:'school',footprint:3,x:108,z:53,w:28,d:22,h:20,color:0xd98262,accent:0xa64f3b,description:'Community learning and worker development.'}),
 ];
 
-const airportBuilding = building({name:'Airport',footprint:4,x:245,z:-27,w:26,d:19,h:14,color:0x93999d,accent:0x62676b,description:'Locked expansion island. Unlocks when total revenue reaches $10,000.'});
+const airportBuilding = createAirportTerminal(258,-30);
 airportBuilding.traverse(o=>{ if(o.material && o.material.color) o.material.color.multiplyScalar(.72); });
 
-const runway=new THREE.Mesh(new THREE.BoxGeometry(76,.45,17),mats.road);
-runway.position.set(222,.3,-58);
+const runway=new THREE.Mesh(new THREE.BoxGeometry(178,.45,19),mats.road);
+runway.position.set(252,.3,-101);
 scene.add(runway);
-for(let x=190;x<258;x+=13){
-  const stripe=new THREE.Mesh(new THREE.BoxGeometry(7,.1,1),mats.white);
-  stripe.position.set(x,.6,-58); scene.add(stripe);
+for(let x=170;x<337;x+=16){
+  const stripe=new THREE.Mesh(new THREE.BoxGeometry(8,.1,1.1),mats.white);
+  stripe.position.set(x,.6,-101); scene.add(stripe);
+}
+const taxiway=new THREE.Mesh(new THREE.BoxGeometry(112,.36,9),mats.road);
+taxiway.position.set(260,.28,-67);
+scene.add(taxiway);
+const apron=new THREE.Mesh(new THREE.BoxGeometry(90,.32,34),new THREE.MeshStandardMaterial({color:0x4b5358,roughness:.92}));
+apron.position.set(258,.27,-49);
+scene.add(apron);
+for(const sx of [226,246,266,286]){
+  const gateMark=new THREE.Mesh(new THREE.BoxGeometry(12,.08,.8),mats.yellow);
+  gateMark.position.set(sx,.47,-52);
+  scene.add(gateMark);
 }
 
 // DESTINATION PARKING
@@ -702,7 +953,7 @@ const parkingByName={
   'Cafe':createParkingLot({name:'Cafe',x:-61,z:34,entryX:-61,entryZ:25,spaces:4}),
   'Market':createParkingLot({name:'Market',x:0,z:34,entryX:0,entryZ:25,spaces:4}),
   'School':createParkingLot({name:'School',x:108,z:35,entryX:108,entryZ:25,spaces:5}),
-  'Airport':createParkingLot({name:'Airport',x:245,z:-43,entryX:226,entryZ:-58,spaces:6,airport:true})
+  'Airport':createParkingLot({name:'Airport',x:258,z:2,entryX:226,entryZ:-58,spaces:8,airport:true})
 };
 
 destinations.forEach(b=>{
