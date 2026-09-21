@@ -2459,6 +2459,255 @@ function setCruiseLockedAppearance(group,locked){
   });
 }
 
+// WATER-ONLY BOAT DOCK
+// This building type is only valid when its footprint sits on land and at least
+// one side of the footprint directly borders open water.
+const boatTraffic=[];
+
+function isLandAt(x,z){
+  return pointInPolygon(x,z,mainPoints) ||
+    pointInPolygon(x,z,airportPoints) ||
+    pointInPolygon(x,z,transitPoints) ||
+    pointInPolygon(x,z,cruisePoints);
+}
+
+function isWaterAdjacentPlacement(x,z,footprint=2){
+  if(!isLandAt(x,z)) return false;
+  const half=footprint*GRID_TILE/2;
+  const probe=half+GRID_TILE*.45;
+  return [
+    [x+probe,z],
+    [x-probe,z],
+    [x,z+probe],
+    [x,z-probe]
+  ].some(([px,pz])=>!isLandAt(px,pz));
+}
+
+const buildingPlacementRules={
+  boatDock:({x,z,footprint=2})=>isWaterAdjacentPlacement(x,z,footprint)
+};
+
+function createBoatDock(x,z){
+  const footprint=2;
+  if(!buildingPlacementRules.boatDock({x,z,footprint})){
+    console.warn('Boat Dock rejected: it must be placed directly next to water.',x,z);
+    return null;
+  }
+
+  const g=new THREE.Group();
+  g.position.set(x,.2,z);
+  g.userData={
+    name:'Boat Dock',
+    description:'A waterfront marina where residents launch small boats and cruise around Business World. This building can only be placed directly next to water.',
+    style:'boatDock',
+    gridLot:true,
+    footprint,
+    footprintZ:footprint,
+    requiresWater:true,
+    placementRule:'water-adjacent-only'
+  };
+
+  const wood=new THREE.MeshStandardMaterial({color:0x9a7048,roughness:.88});
+  const woodDark=new THREE.MeshStandardMaterial({color:0x60452f,roughness:.92});
+  const white=new THREE.MeshStandardMaterial({color:0xf3efe2,roughness:.58});
+  const teal=new THREE.MeshStandardMaterial({color:0x2c8f91,roughness:.5});
+  const glass=new THREE.MeshPhysicalMaterial({color:0x75d5e4,roughness:.14,transparent:true,opacity:.82,clearcoat:.45});
+  const ropeMat=new THREE.MeshStandardMaterial({color:0xd9c293,roughness:.9});
+  const red=new THREE.MeshStandardMaterial({color:0xd95d4e,roughness:.65});
+
+  // Land-side marina office.
+  const lot=new THREE.Mesh(new THREE.BoxGeometry(25,.55,23),white);
+  lot.position.set(0,.28,0);
+  lot.receiveShadow=true;
+  g.add(lot);
+
+  const office=new THREE.Mesh(new THREE.BoxGeometry(17,10,13),white);
+  office.position.set(0,5.4,1);
+  office.castShadow=true;
+  g.add(office);
+
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(20,1.1,16),teal);
+  roof.position.set(0,10.8,1);
+  roof.castShadow=true;
+  g.add(roof);
+
+  const frontGlass=new THREE.Mesh(new THREE.BoxGeometry(9,5,.35),glass);
+  frontGlass.position.set(0,4.9,-5.65);
+  g.add(frontGlass);
+
+  const sign=spriteLabel('BOAT DOCK','#17666f');
+  sign.position.set(0,13,-2);
+  sign.scale.multiplyScalar(.58);
+  g.add(sign);
+
+  // Main dock extends north from land into the water.
+  const pierLength=42;
+  const pier=new THREE.Mesh(new THREE.BoxGeometry(7,.72,pierLength),wood);
+  pier.position.set(0,-5.8,-27);
+  pier.castShadow=true;
+  pier.receiveShadow=true;
+  g.add(pier);
+
+  // Two side slips.
+  for(const sx of [-1,1]){
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(18,.62,4.2),wood);
+    arm.position.set(sx*7.2,-5.8,-34);
+    g.add(arm);
+  }
+
+  // Pilings reach down toward the ocean floor.
+  for(const pz of [-10,-22,-34,-46]){
+    for(const px of [-2.8,2.8]){
+      const post=new THREE.Mesh(new THREE.CylinderGeometry(.38,.48,13.5,10),woodDark);
+      post.position.set(px,-11.3,pz);
+      g.add(post);
+    }
+  }
+
+  // Rail / rope details near the office.
+  for(const sx of [-3.2,3.2]){
+    const post=new THREE.Mesh(new THREE.CylinderGeometry(.1,.13,3,8),woodDark);
+    post.position.set(sx,-4.2,-10);
+    g.add(post);
+    const rope=new THREE.Mesh(new THREE.TorusGeometry(1.1,.09,6,18,Math.PI),ropeMat);
+    rope.position.set(sx,-3.5,-10);
+    rope.rotation.z=Math.PI/2;
+    g.add(rope);
+  }
+
+  // Lifebuoy on the dock house.
+  const buoy=new THREE.Mesh(new THREE.TorusGeometry(1.15,.32,10,24),red);
+  buoy.position.set(6.5,5.2,-5.9);
+  buoy.rotation.x=Math.PI/2;
+  g.add(buoy);
+
+  scene.add(g);
+  clickable.push(g);
+  return g;
+}
+
+function createLeisureBoat(route,index=0){
+  const g=new THREE.Group();
+
+  const hullMat=new THREE.MeshStandardMaterial({
+    color:[0xf5f1e8,0x4d9ed2,0xe76d55,0xf1bd48][index%4],
+    roughness:.45
+  });
+  const trimMat=new THREE.MeshStandardMaterial({color:0x173d57,roughness:.42});
+  const seatMat=new THREE.MeshStandardMaterial({color:0xe8dcc8,roughness:.7});
+  const skinMat=new THREE.MeshStandardMaterial({color:0xf1c3a0,roughness:.8});
+  const shirtMat=new THREE.MeshStandardMaterial({
+    color:[0x4e8fd0,0xd65f52,0x55a66a,0x8e62c2][index%4],
+    roughness:.65
+  });
+
+  const hull=new THREE.Mesh(new THREE.BoxGeometry(6.6,1.25,2.8),hullMat);
+  hull.position.y=.25;
+  hull.castShadow=true;
+  g.add(hull);
+
+  const bow=new THREE.Mesh(new THREE.ConeGeometry(1.42,3.1,10),hullMat);
+  bow.rotation.z=-Math.PI/2;
+  bow.position.set(4.8,.25,0);
+  bow.castShadow=true;
+  g.add(bow);
+
+  const windshield=new THREE.Mesh(new THREE.BoxGeometry(.22,1.25,2.15),trimMat);
+  windshield.position.set(1.2,1.1,0);
+  windshield.rotation.z=-.18;
+  g.add(windshield);
+
+  const seat=new THREE.Mesh(new THREE.BoxGeometry(1.7,.55,1.8),seatMat);
+  seat.position.set(-1.1,.95,0);
+  g.add(seat);
+
+  // Visible NPC driver.
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(.35,.45,1.4,8),shirtMat);
+  body.position.set(-.15,1.75,0);
+  g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.38,10,8),skinMat);
+  head.position.set(-.15,2.7,0);
+  g.add(head);
+
+  // White wake ribbons trail behind the moving boat.
+  const wakeMat=new THREE.MeshBasicMaterial({color:0xe9fbff,transparent:true,opacity:.42,depthWrite:false});
+  const wakeL=new THREE.Mesh(new THREE.BoxGeometry(6,.035,.22),wakeMat);
+  wakeL.position.set(-5,-.15,-1.05);
+  wakeL.rotation.y=.12;
+  g.add(wakeL);
+  const wakeR=wakeL.clone();
+  wakeR.position.z=1.05;
+  wakeR.rotation.y=-.12;
+  g.add(wakeR);
+
+  g.position.set(route[0][0],-12.15,route[0][1]);
+  scene.add(g);
+
+  boatTraffic.push({
+    obj:g,
+    route,
+    routeIndex:0,
+    speed:9.5+index*1.3,
+    wait:index*.9,
+    baseY:-12.15,
+    phase:index*1.7,
+    wakeL,
+    wakeR
+  });
+  return g;
+}
+
+function updateBoatTraffic(dt,t){
+  boatTraffic.forEach(boat=>{
+    if(boat.wait>0){
+      boat.wait-=dt;
+      boat.obj.position.y=boat.baseY+Math.sin(t*2+boat.phase)*.12;
+      return;
+    }
+
+    const route=boat.route;
+    const target=route[(boat.routeIndex+1)%route.length];
+    const dx=target[0]-boat.obj.position.x;
+    const dz=target[1]-boat.obj.position.z;
+    const dist=Math.hypot(dx,dz);
+
+    if(dist<1.1){
+      boat.routeIndex=(boat.routeIndex+1)%route.length;
+      if(boat.routeIndex===0) boat.wait=2.2+Math.random()*2.6;
+      return;
+    }
+
+    const step=Math.min(dist,boat.speed*dt);
+    boat.obj.position.x+=dx/dist*step;
+    boat.obj.position.z+=dz/dist*step;
+    boat.obj.position.y=boat.baseY+Math.sin(t*2.4+boat.phase)*.16;
+    boat.obj.rotation.y=-Math.atan2(dz,dx);
+    const wakePulse=.34+.16*(.5+.5*Math.sin(t*5+boat.phase));
+    boat.wakeL.material.opacity=wakePulse;
+    boat.wakeR.material.opacity=wakePulse;
+  });
+}
+
+const boatDock=createBoatDock(110,-108);
+
+if(boatDock){
+  const dockRouteA=[
+    [110,-150],[75,-180],[20,-205],[-45,-215],[-100,-195],
+    [-120,-165],[-75,-155],[-10,-170],[60,-165]
+  ];
+  const dockRouteB=[
+    [110,-150],[140,-180],[135,-225],[105,-270],[50,-290],
+    [-10,-280],[-45,-245],[10,-220],[70,-190]
+  ];
+  const dockRouteC=[
+    [110,-150],[90,-185],[45,-230],[15,-265],[-20,-250],
+    [-5,-215],[40,-190],[85,-165]
+  ];
+  createLeisureBoat(dockRouteA,0);
+  createLeisureBoat(dockRouteB,1);
+  createLeisureBoat(dockRouteC,2);
+}
+
 const destinations = [
   building({name:'Marketing Studio',style:'marketing',footprint:3,x:-105,z:-48,w:25,d:20,h:24,color:0xdb7168,accent:0x813856,description:'Marketing content, social campaigns and brand growth.'}),
   building({name:'Accounting Hub',style:'accounting',footprint:3,x:-61,z:-48,w:24,d:20,h:28,color:0x609ed5,accent:0x2d5d93,description:'Invoices, bookkeeping, revenue, profit and forecasting.'}),
@@ -2468,7 +2717,8 @@ const destinations = [
   building({name:'Cafe',style:'cafe',footprint:2,x:-61,z:51,w:25,d:21,h:15,color:0xd99661,accent:0x764b39,description:'Social space where agents can idle, meet and recharge.'}),
   building({name:'Market',style:'market',footprint:2,x:0,z:51,w:25,d:21,h:16,color:0xe5ad65,accent:0x287b5f,description:'Supplies and local commerce.'}),
   building({name:'School',style:'school',footprint:3,x:108,z:53,w:28,d:22,h:20,color:0xd98262,accent:0xa64f3b,description:'Community learning and worker development.'}),
-];
+  boatDock,
+].filter(Boolean);
 
 const airportBuilding = createAirportTerminal(303,-24);
 airportBuilding.traverse(o=>{ if(o.material && o.material.color) o.material.color.multiplyScalar(.72); });
@@ -2798,7 +3048,8 @@ const parkingByName={
   'Cafe':createParkingLot({name:'Cafe',x:-61,z:34,entryX:-61,entryZ:25,spaces:4}),
   'Market':createParkingLot({name:'Market',x:0,z:34,entryX:0,entryZ:25,spaces:4}),
   'School':createParkingLot({name:'School',x:108,z:35,entryX:108,entryZ:25,spaces:5}),
-  'Airport':createParkingLot({name:'Airport',x:344,z:55,entryX:405,entryZ:48,spaces:10,airport:true})
+  'Airport':createParkingLot({name:'Airport',x:344,z:55,entryX:405,entryZ:48,spaces:10,airport:true}),
+  'Boat Dock':createParkingLot({name:'Boat Dock',x:110,z:-87,entryX:110,entryZ:-72,spaces:4})
 };
 
 destinations.forEach(b=>{
@@ -3215,6 +3466,7 @@ function animate(){
   controls.target.y = THREE.MathUtils.clamp(controls.target.y,0,45);
   workers.forEach(w=>moveRoute(w,dt));
   cars.forEach(c=>updateDestinationCar(c,dt));
+  updateBoatTraffic(dt,t);
   updateDecorativeAirportPlanes(dt);
   updateTransitTrain(dt);
   updateTransitBridgeBuild(dt);
