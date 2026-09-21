@@ -452,26 +452,28 @@ function createShoreSlopeGeometry(){
 const beachSlopeGeometry=createShoreSlopeGeometry();
 const beachRelaxSpots=[];
 
-function addBeachSandPair(backX,z){
-  // Backing 1x1 sand plot.
+function addBeachSandPairNorth(x,backZ){
+  // Backing 1x1 sand plot sits on the TOP/NORTH edge of the main island.
   const back=new THREE.Mesh(
     new THREE.BoxGeometry(GRID_TILE-.35,.26,GRID_TILE-.35),
     beachSandMat
   );
-  back.position.set(backX,.28,z);
+  back.position.set(x,.28,backZ);
   back.receiveShadow=true;
   beachGroup.add(back);
 
-  // Front 1x1 plot slopes from land height down to the water.
+  // Front 1x1 shoreline plot slopes NORTH from land height down to the water.
+  // The slope is only created because the backing sand tile exists directly behind it.
   const front=new THREE.Mesh(beachSlopeGeometry,beachWetSandMat);
-  front.position.set(backX+GRID_TILE,0,z);
+  front.rotation.y=Math.PI/2;
+  front.position.set(x,0,backZ-GRID_TILE);
   front.receiveShadow=true;
   front.castShadow=true;
   beachGroup.add(front);
 
   beachRelaxSpots.push(
-    new THREE.Vector3(backX-2,.5,z-2),
-    new THREE.Vector3(backX+2,.5,z+2)
+    new THREE.Vector3(x-2,.5,backZ-2),
+    new THREE.Vector3(x+2,.5,backZ+2)
   );
 }
 
@@ -534,24 +536,25 @@ function addRelaxingNpc(x,z,colorIndex=0){
   beachGroup.add(g);
 }
 
-// Eight shoreline sections: every water-facing tile has exactly one 1x1 sand plot behind it.
-for(const z of [-6.5,6.5,19.5,32.5,45.5,58.5,71.5,84.5]){
-  addBeachSandPair(124.5,z);
+// TOP/NORTH beach, immediately to the RIGHT/EAST of the center bridge.
+// Each water-facing sand tile is backed by exactly one 1x1 sand tile inland.
+for(const x of [58.5,71.5,84.5,97.5]){
+  addBeachSandPairNorth(x,-123.5);
 }
 
-addBeachUmbrella(121,8,false);
-addBeachUmbrella(121,35,true);
-addBeachUmbrella(121,63,false);
-addBeachChair(118,17,.15);
-addBeachChair(119,50,-.15);
-addBeachChair(118,77,.1);
-addBeachPalm(118,-1,.9);
-addBeachPalm(119,28,1.0);
-addBeachPalm(118,58,.92);
-addBeachPalm(119,86,.88);
-addRelaxingNpc(121,18,0);
-addRelaxingNpc(120,48,1);
-addRelaxingNpc(121,76,3);
+// Relaxation props now live on the top beach instead of the lower/right shoreline.
+addBeachUmbrella(62,-119,false);
+addBeachUmbrella(78,-119,true);
+addBeachUmbrella(94,-119,false);
+addBeachChair(66,-116,.15);
+addBeachChair(82,-116,-.15);
+addBeachChair(96,-116,.1);
+addBeachPalm(59,-114,.9);
+addBeachPalm(75,-113,1.0);
+addBeachPalm(91,-114,.92);
+addRelaxingNpc(69,-118,0);
+addRelaxingNpc(84,-118,1);
+addRelaxingNpc(96,-118,3);
 
 beachGroup.userData={
   name:'Beach',
