@@ -441,6 +441,16 @@ road(205,-420,205,-224,11);
 road(-72,-320,-18,-320,10);
 road(158,-320,205,-320,10);
 
+// Road approaches for the two $25k bridge connections.
+// These intentionally meet existing streets on both sides of the water gap.
+road(-36,-116,-36,-145,11);
+road(-72,-232,-36,-232,11);
+road(-36,-232,-36,-191,11);
+
+road(190,-120,205,-120,11);
+road(205,-120,205,-158,11);
+road(205,-224,205,-208,11);
+
 function spriteLabel(text,bg='#143e62'){
   const c=document.createElement('canvas'); c.width=512; c.height=160;
   const x=c.getContext('2d');
@@ -452,6 +462,113 @@ function spriteLabel(text,bg='#143e62'){
   const s=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false}));
   s.scale.set(22,6.9,1);
   return s;
+}
+
+
+// $25K EXPANSION BRIDGES
+// Two road-aligned bridges are visibly broken while the Transit District is locked.
+// At $25k revenue, the broken pieces disappear and the completed bridges activate.
+const transitBrokenBridgeGroups=[];
+const transitCompleteBridges=[];
+const transitBridgeLabels=[];
+
+const bridgeConcreteMat=new THREE.MeshStandardMaterial({color:0x8b9398,roughness:.82});
+const bridgeBarrierRed=new THREE.MeshStandardMaterial({color:0xd84536,roughness:.55});
+const bridgeBarrierWhite=new THREE.MeshStandardMaterial({color:0xf7f3e9,roughness:.55});
+const bridgeWarningMat=new THREE.MeshStandardMaterial({
+  color:0xffa31a,emissive:0xff6a00,emissiveIntensity:1.8,roughness:.3
+});
+
+function addBridgeBarricade(group,x,z,rotation=0){
+  const barGroup=new THREE.Group();
+  barGroup.position.set(x,3.7,z);
+  barGroup.rotation.y=rotation;
+
+  const postL=new THREE.Mesh(new THREE.BoxGeometry(.45,3.5,.45),bridgeConcreteMat);
+  postL.position.set(-4.4,-1.0,0);
+  barGroup.add(postL);
+  const postR=postL.clone();
+  postR.position.x=4.4;
+  barGroup.add(postR);
+
+  for(let i=0;i<7;i++){
+    const stripe=new THREE.Mesh(
+      new THREE.BoxGeometry(1.55,1.0,.55),
+      i%2===0?bridgeBarrierRed:bridgeBarrierWhite
+    );
+    stripe.position.set(-4.65+i*1.55,.15,0);
+    stripe.rotation.z=-.28;
+    barGroup.add(stripe);
+  }
+
+  for(const sx of [-4.4,4.4]){
+    const lamp=new THREE.Mesh(new THREE.SphereGeometry(.42,10,8),bridgeWarningMat);
+    lamp.position.set(sx,1.55,0);
+    barGroup.add(lamp);
+  }
+
+  group.add(barGroup);
+}
+
+function makeBrokenTransitBridge({x,cityZ,transitZ,labelZ}){
+  const group=new THREE.Group();
+  scene.add(group);
+
+  // Leave a large obvious missing section in the middle.
+  const gap=14;
+  const mid=(cityZ+transitZ)/2;
+  const cityEnd=mid+gap/2;
+  const transitEnd=mid-gap/2;
+
+  const cityStub=road(x,cityZ,x,cityEnd,11,true);
+  const transitStub=road(x,transitZ,x,transitEnd,11,true);
+  group.add(cityStub);
+  group.add(transitStub);
+
+  // Support blocks beneath each broken end make the bridge unmistakable.
+  for(const z of [cityEnd,transitEnd]){
+    const pier=new THREE.Mesh(new THREE.BoxGeometry(13,7,5.5),bridgeConcreteMat);
+    pier.position.set(x,-1.2,z);
+    pier.castShadow=true;
+    scene.add(pier);
+    group.add(pier);
+  }
+
+  addBridgeBarricade(group,x,cityEnd,0);
+  addBridgeBarricade(group,x,transitEnd,Math.PI);
+
+  const label=spriteLabel('UNLOCKED AT $25K REVENUE','#5a3c22');
+  label.position.set(x,13,labelZ ?? mid);
+  label.scale.multiplyScalar(.72);
+  scene.add(label);
+  transitBridgeLabels.push(label);
+
+  transitBrokenBridgeGroups.push(group);
+
+  const completed=road(x,cityZ,x,transitZ,11,true);
+  completed.visible=false;
+  transitCompleteBridges.push(completed);
+}
+
+// Left bridge: directly continues the main-city north/south street.
+// Right bridge: directly continues the airport/transit street.
+makeBrokenTransitBridge({x:-36,cityZ:-145,transitZ:-191,labelZ:-168});
+makeBrokenTransitBridge({x:205,cityZ:-158,transitZ:-208,labelZ:-183});
+
+function unlockTransitBridges(){
+  transitBrokenBridgeGroups.forEach(g=>g.visible=false);
+  transitBridgeLabels.forEach(l=>l.visible=false);
+  transitCompleteBridges.forEach(b=>{
+    b.visible=true;
+    b.scale.z=.04;
+  });
+}
+
+function updateTransitBridgeBuild(dt){
+  if(!transitUnlocked) return;
+  transitCompleteBridges.forEach(b=>{
+    if(b.scale.z<1) b.scale.z=Math.min(1,b.scale.z+dt*1.8);
+  });
 }
 
 
@@ -1547,6 +1664,7 @@ function unlockTransitDistrict(){
   transitStation.userData.description='Underground Central Station is open. Trains now enter and exit through the underground tunnels automatically.';
   transitStation.userData.train.visible=true;
   transitLockLabel.visible=false;
+  unlockTransitBridges();
   islandStatus.textContent='Train District unlocked ✓';
   islandStatus.classList.add('unlocked');
 }
@@ -1653,6 +1771,7 @@ function animate(){
   workers.forEach(w=>moveRoute(w,dt));
   cars.forEach(c=>updateDestinationCar(c,dt));
   updateTransitTrain(dt);
+  updateTransitBridgeBuild(dt);
   updateMetrics(dt);
   updateLighting(t);
   updateWeather(dt);
