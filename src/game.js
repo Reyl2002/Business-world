@@ -466,65 +466,303 @@ function spriteLabel(text,bg='#143e62'){
 
 function createRevenueBubble(title,target,x,y,z){
   const canvas=document.createElement('canvas');
-  canvas.width=640;
-  canvas.height=240;
+  canvas.width=900;
+  canvas.height=330;
   const ctx=canvas.getContext('2d');
   const texture=new THREE.CanvasTexture(canvas);
   texture.colorSpace=THREE.SRGBColorSpace;
-  const material=new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false});
+
+  const material=new THREE.SpriteMaterial({
+    map:texture,
+    transparent:true,
+    depthTest:false,
+    depthWrite:false
+  });
+
   const sprite=new THREE.Sprite(material);
+  const baseScaleX=title==='AIRPORT ISLAND'?68:62;
+  const baseScaleY=title==='AIRPORT ISLAND'?25:23;
   sprite.position.set(x,y,z);
-  sprite.scale.set(48,18,1);
+  sprite.scale.set(baseScaleX,baseScaleY,1);
   sprite.renderOrder=1000;
   scene.add(sprite);
-  return {ctx,texture,sprite,title,target,lastValue:-1};
+
+  return {
+    ctx,texture,sprite,title,target,lastValue:-1,
+    baseY:y,baseScaleX,baseScaleY,
+    phase:Math.random()*Math.PI*2,
+    nextSpin:5+Math.random()*5,
+    spinStart:-1
+  };
+}
+
+function drawAirportIcon(ctx,cx,cy){
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.rotate(-0.38);
+  ctx.fillStyle='#ffffff';
+  ctx.strokeStyle='#1956a8';
+  ctx.lineWidth=8;
+  ctx.lineJoin='round';
+
+  ctx.beginPath();
+  ctx.moveTo(-44,-5);
+  ctx.lineTo(-8,-8);
+  ctx.lineTo(20,-38);
+  ctx.lineTo(31,-34);
+  ctx.lineTo(16,-6);
+  ctx.lineTo(50,4);
+  ctx.lineTo(50,14);
+  ctx.lineTo(16,12);
+  ctx.lineTo(30,39);
+  ctx.lineTo(19,44);
+  ctx.lineTo(-8,14);
+  ctx.lineTo(-44,17);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle='#87d5ff';
+  ctx.fillRect(-18,-2,48,8);
+  ctx.restore();
+}
+
+function drawTrainIcon(ctx,cx,cy){
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.fillStyle='#ffffff';
+  ctx.strokeStyle='#5a3e9f';
+  ctx.lineWidth=7;
+  ctx.lineJoin='round';
+
+  ctx.beginPath();
+  ctx.roundRect(-34,-38,68,64,16);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle='#8dd6ff';
+  ctx.beginPath(); ctx.roundRect(-23,-27,46,24,8); ctx.fill();
+
+  ctx.fillStyle='#5a3e9f';
+  ctx.beginPath(); ctx.arc(-20,27,8,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(20,27,8,0,Math.PI*2); ctx.fill();
+
+  ctx.lineWidth=6;
+  ctx.beginPath(); ctx.moveTo(-24,42); ctx.lineTo(-8,25); ctx.moveTo(24,42); ctx.lineTo(8,25); ctx.stroke();
+  ctx.restore();
 }
 
 function drawRevenueBubble(bubble,currentRevenue){
   if(!bubble || !bubble.sprite.visible) return;
+
   const value=Math.floor(currentRevenue);
   if(value===bubble.lastValue) return;
   bubble.lastValue=value;
+
   const ctx=bubble.ctx;
   const progress=THREE.MathUtils.clamp(currentRevenue/bubble.target,0,1);
+  const isAirport=bubble.title==='AIRPORT ISLAND';
 
-  ctx.clearRect(0,0,640,240);
-  ctx.fillStyle='rgba(20,38,56,.96)';
-  ctx.beginPath(); ctx.roundRect(18,14,604,190,32); ctx.fill();
-  ctx.strokeStyle='rgba(255,255,255,.22)'; ctx.lineWidth=4;
-  ctx.beginPath(); ctx.roundRect(18,14,604,190,32); ctx.stroke();
+  ctx.clearRect(0,0,900,330);
 
-  ctx.fillStyle='#f4bf48'; ctx.beginPath(); ctx.arc(66,70,30,0,Math.PI*2); ctx.fill();
-  ctx.strokeStyle='#233244'; ctx.lineWidth=7;
-  ctx.beginPath(); ctx.arc(66,63,12,Math.PI,0); ctx.stroke();
-  ctx.fillStyle='#233244'; ctx.fillRect(54,61,24,24);
+  // Big white playful game bubble.
+  ctx.save();
+  ctx.shadowColor='rgba(31,70,115,.28)';
+  ctx.shadowBlur=28;
+  ctx.shadowOffsetY=14;
+  ctx.fillStyle='#ffffff';
+  ctx.beginPath();
+  ctx.roundRect(28,22,844,258,52);
+  ctx.fill();
+  ctx.restore();
 
-  ctx.textAlign='left'; ctx.fillStyle='#fff'; ctx.font='900 31px system-ui';
-  ctx.fillText(bubble.title,110,58);
-  ctx.fillStyle='#d9e6f1'; ctx.font='700 24px system-ui';
-  ctx.fillText('Requires $'+Math.round(bubble.target/1000)+'k Revenue',110,92);
+  // Soft blue outline.
+  ctx.strokeStyle='#b8d9f5';
+  ctx.lineWidth=6;
+  ctx.beginPath();
+  ctx.roundRect(28,22,844,258,52);
+  ctx.stroke();
 
-  ctx.textAlign='right'; ctx.fillStyle='#b9d1e4'; ctx.font='700 20px system-ui';
-  ctx.fillText('$'+value.toLocaleString()+' / $'+bubble.target.toLocaleString(),570,122);
+  // Colored icon badge.
+  const iconX=112,iconY=102;
+  const badgeGrad=ctx.createLinearGradient(70,58,154,146);
+  if(isAirport){
+    badgeGrad.addColorStop(0,'#ffd95c');
+    badgeGrad.addColorStop(1,'#ffad22');
+  }else{
+    badgeGrad.addColorStop(0,'#bba8ff');
+    badgeGrad.addColorStop(1,'#7f63e7');
+  }
+  ctx.fillStyle=badgeGrad;
+  ctx.beginPath(); ctx.arc(iconX,iconY,58,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#ffffff'; ctx.lineWidth=6; ctx.stroke();
 
-  const bx=52,by=142,bw=536,bh=30;
-  ctx.fillStyle='rgba(255,255,255,.14)';
-  ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,15); ctx.fill();
+  if(isAirport) drawAirportIcon(ctx,iconX,iconY);
+  else drawTrainIcon(ctx,iconX,iconY);
 
-  const fillW=Math.max(30,bw*progress);
+  // Friendly two-tone title with dark outline.
+  const titleY=90;
+  ctx.textAlign='left';
+  ctx.textBaseline='middle';
+  ctx.font='1000 54px system-ui';
+  ctx.lineJoin='round';
+  ctx.lineWidth=12;
+  ctx.strokeStyle='#152b73';
+
+  if(isAirport){
+    ctx.strokeText('AIRPORT',190,titleY);
+    ctx.fillStyle='#42bdf5';
+    ctx.fillText('AIRPORT',190,titleY);
+    const w=ctx.measureText('AIRPORT').width;
+    ctx.strokeText('ISLAND',190+w+12,titleY);
+    ctx.fillStyle='#ffb52c';
+    ctx.fillText('ISLAND',190+w+12,titleY);
+  }else{
+    ctx.strokeText('TRANSIT',190,titleY);
+    ctx.fillStyle='#8f73ef';
+    ctx.fillText('TRANSIT',190,titleY);
+    const w=ctx.measureText('TRANSIT').width;
+    ctx.strokeText('DISTRICT',190+w+12,titleY);
+    ctx.fillStyle='#47c879';
+    ctx.fillText('DISTRICT',190+w+12,titleY);
+  }
+
+  // Requirement line.
+  ctx.lineWidth=1;
+  ctx.strokeStyle='transparent';
+  ctx.fillStyle='#35415f';
+  ctx.font='800 32px system-ui';
+  ctx.fillText('Requires $'+Math.round(bubble.target/1000)+'k Revenue',190,144);
+
+  // Numeric progress.
+  ctx.textAlign='right';
+  ctx.fillStyle='#283969';
+  ctx.font='900 28px system-ui';
+  ctx.fillText('$'+value.toLocaleString()+' / $'+bubble.target.toLocaleString(),820,201);
+
+  // Chunky bright progress bar.
+  const bx=72,by=214,bw=756,bh=48;
+  ctx.fillStyle='#d7e2ee';
+  ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,24); ctx.fill();
+
+  const fillW=Math.max(48,bw*progress);
   const grad=ctx.createLinearGradient(bx,by,bx+bw,by);
-  grad.addColorStop(0,'#43c47b'); grad.addColorStop(1,'#d8e95f');
-  ctx.fillStyle=grad; ctx.beginPath(); ctx.roundRect(bx,by,fillW,bh,15); ctx.fill();
+  grad.addColorStop(0,'#2fe463');
+  grad.addColorStop(.65,'#a8ef3d');
+  grad.addColorStop(1,'#ffd738');
+  ctx.fillStyle=grad;
+  ctx.beginPath(); ctx.roundRect(bx,by,fillW,bh,24); ctx.fill();
 
-  ctx.textAlign='center'; ctx.fillStyle='#fff'; ctx.font='900 18px system-ui';
-  ctx.fillText(Math.floor(progress*100)+'%',bx+bw/2,164);
+  // Diagonal glossy stripes in fill.
+  ctx.save();
+  ctx.beginPath(); ctx.roundRect(bx,by,fillW,bh,24); ctx.clip();
+  ctx.strokeStyle='rgba(255,255,255,.18)';
+  ctx.lineWidth=12;
+  for(let sx=bx-50;sx<bx+fillW+50;sx+=34){
+    ctx.beginPath();
+    ctx.moveTo(sx,by+bh);
+    ctx.lineTo(sx+32,by);
+    ctx.stroke();
+  }
+  ctx.restore();
 
-  ctx.fillStyle='rgba(20,38,56,.96)';
-  ctx.beginPath(); ctx.moveTo(278,204); ctx.lineTo(362,204); ctx.lineTo(320,236); ctx.closePath(); ctx.fill();
+  // Percentage pill.
+  const pct=Math.floor(progress*100)+'%';
+  const pctX=Math.max(bx+72,Math.min(bx+fillW-58,bx+bw-70));
+  ctx.fillStyle='#ffffff';
+  ctx.strokeStyle='rgba(30,60,105,.18)';
+  ctx.lineWidth=3;
+  ctx.beginPath(); ctx.roundRect(pctX-48,by+5,96,bh-10,18); ctx.fill(); ctx.stroke();
+  ctx.textAlign='center';
+  ctx.fillStyle='#24345d';
+  ctx.font='1000 24px system-ui';
+  ctx.fillText(pct,pctX,by+bh/2+1);
+
+  // Pointer.
+  ctx.fillStyle='#ffffff';
+  ctx.strokeStyle='#b8d9f5';
+  ctx.lineWidth=5;
+  ctx.beginPath();
+  ctx.moveTo(402,280);
+  ctx.lineTo(498,280);
+  ctx.lineTo(450,326);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Friendly sparkles / motion marks built into the card art.
+  const sparkle=(x,y,r,color)=>{
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.fillStyle=color;
+    ctx.beginPath();
+    ctx.moveTo(0,-r);
+    ctx.lineTo(r*.3,-r*.3);
+    ctx.lineTo(r,0);
+    ctx.lineTo(r*.3,r*.3);
+    ctx.lineTo(0,r);
+    ctx.lineTo(-r*.3,r*.3);
+    ctx.lineTo(-r,0);
+    ctx.lineTo(-r*.3,-r*.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  };
+  sparkle(850,76,15,'#ffd23d');
+  sparkle(52,94,12,isAirport?'#4fc9ff':'#9e86ff');
+  sparkle(834,150,9,'#ffb32c');
+
+  ctx.strokeStyle='#ffbf2f';
+  ctx.lineWidth=9;
+  ctx.lineCap='round';
+  for(const [x1,y1,x2,y2] of [[50,40,35,25],[70,30,68,10],[830,35,848,20],[848,47,869,44]]){
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  }
 
   bubble.texture.needsUpdate=true;
 }
 
+function updateRevenueBubbleMotion(t){
+  const bubbles=[airportRevenueBubble,transitRevenueBubble];
+  bubbles.forEach((bubble,index)=>{
+    if(!bubble || !bubble.sprite.visible) return;
+
+    // Constant friendly floating/bobbing.
+    const bob=Math.sin(t*1.8+bubble.phase)*1.8;
+    const breathe=1+Math.sin(t*2.2+bubble.phase)*.025;
+    bubble.sprite.position.y=bubble.baseY+bob;
+    bubble.sprite.scale.set(
+      bubble.baseScaleX*breathe,
+      bubble.baseScaleY*breathe,
+      1
+    );
+
+    // Every few seconds, do a quick playful spin/wiggle and bounce.
+    if(t>=bubble.nextSpin && bubble.spinStart<0){
+      bubble.spinStart=t;
+      bubble.nextSpin=t+7+Math.random()*6;
+    }
+
+    if(bubble.spinStart>=0){
+      const elapsed=t-bubble.spinStart;
+      if(elapsed<1.05){
+        const p=elapsed/1.05;
+        const wave=Math.sin(p*Math.PI);
+        bubble.sprite.material.rotation=Math.sin(p*Math.PI*4)*.11*wave*(index?-.85:1);
+        const pop=1+wave*.16;
+        bubble.sprite.scale.set(
+          bubble.baseScaleX*pop,
+          bubble.baseScaleY*pop,
+          1
+        );
+        bubble.sprite.position.y=bubble.baseY+bob+wave*5.5;
+      }else{
+        bubble.sprite.material.rotation=0;
+        bubble.spinStart=-1;
+      }
+    }
+  });
+}
 
 
 // $25K EXPANSION BRIDGES
@@ -2014,6 +2252,7 @@ function animate(){
   updateLighting(t);
   updateWeather(dt);
   updateOcean(t);
+  updateRevenueBubbleMotion(t);
   boardTick+=dt;
   if(boardTick>.8){boardTick=0;drawBoard()}
   renderer.render(scene,camera);
