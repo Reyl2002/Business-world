@@ -170,60 +170,82 @@ function createShoreFoam(points,scale=1.035){
 
 let oceanNormalTick=0;
 function updateOcean(t){
+  // Fully automatic ocean: the swell continuously changes on its own.
+  // Calm periods roll into stronger sets, and rain automatically makes the sea rougher.
+  const autoSwell = 1.0 + 0.34*Math.sin(t*.11) + 0.18*Math.sin(t*.037+1.4);
+  const weatherBoost = weatherMode==='RAIN' ? 1.35 : 1.0;
+  const strength = Math.max(.82, autoSwell) * weatherBoost;
+  const speedBoost = weatherMode==='RAIN' ? 1.22 : 1.0;
+
   const pos=oceanGeo.attributes.position;
   const a=pos.array;
   for(let i=0;i<pos.count;i++){
     const x=oceanBase[i*3];
     const z=oceanBase[i*3+2];
-    const wave1=Math.sin(x*.021+t*1.45)*1.35;
-    const wave2=Math.sin(z*.029-t*1.08)*.95;
-    const wave3=Math.sin((x+z)*.015+t*.78)*.55;
-    a[i*3+1]=oceanBase[i*3+1]+wave1+wave2+wave3;
+    const wave1=Math.sin(x*.021+t*1.45*speedBoost)*1.55*strength;
+    const wave2=Math.sin(z*.029-t*1.08*speedBoost)*1.10*strength;
+    const wave3=Math.sin((x+z)*.015+t*.78*speedBoost)*.72*strength;
+    const smallChop=Math.sin((x-z)*.045+t*2.05)*.22*strength;
+    a[i*3+1]=oceanBase[i*3+1]+wave1+wave2+wave3+smallChop;
   }
   pos.needsUpdate=true;
 
   oceanNormalTick++;
   if(oceanNormalTick%5===0) oceanGeo.computeVertexNormals();
 
-  // Move and reshape the bright wave crests so motion is obvious even from far away.
+  // Slight automatic color/depth shift gives the water a living ocean feel.
+  const bluePulse=.5+.5*Math.sin(t*.08);
+  oceanMat.color.setRGB(
+    .012 + bluePulse*.008,
+    .24 + bluePulse*.035,
+    .43 + bluePulse*.055
+  );
+
+  // Bright crest bands travel continuously across the whole ocean.
   for(const line of waveCrests){
     const d=line.userData;
     const p=line.geometry.attributes.position.array;
-    const drift=(t*d.speed)%820;
+    const drift=(t*d.speed*speedBoost)%820;
     let z=d.zBase+drift;
     while(z>410) z-=820;
+
     for(let i=0;i<d.points;i++){
       const x=-d.width/2 + d.width*i/(d.points-1);
       p[i*3]=x;
-      p[i*3+1]=-12.72 + Math.sin(x*.019+t*1.7+d.phase)*.28;
-      p[i*3+2]=z + Math.sin(x*.025+t*.95+d.phase)*d.amplitude + Math.sin(x*.011-t*.55)*1.8;
+      p[i*3+1]=-12.55 + Math.sin(x*.019+t*1.7*speedBoost+d.phase)*.36*strength;
+      p[i*3+2]=z
+        + Math.sin(x*.025+t*.95*speedBoost+d.phase)*d.amplitude*strength
+        + Math.sin(x*.011-t*.55*speedBoost)*2.15*strength;
     }
     line.geometry.attributes.position.needsUpdate=true;
-    line.material.opacity=.58 + .24*(.5+.5*Math.sin(t*1.2+d.phase));
+    line.material.opacity=Math.min(.96,.63 + .24*(.5+.5*Math.sin(t*1.2+d.phase)) + (strength-1)*.16);
   }
 
+  // Crossing wave sets make the surface feel less like parallel lines.
   for(const line of diagonalWaves){
     const d=line.userData;
     const p=line.geometry.attributes.position.array;
-    const drift=(t*d.speed)%900;
+    const drift=(t*d.speed*speedBoost)%900;
     let off=d.offset+drift;
     while(off>450) off-=900;
     const count=p.length/3;
     for(let i=0;i<count;i++){
       const x=-500+1000*i/(count-1);
       p[i*3]=x;
-      p[i*3+1]=-12.80;
-      p[i*3+2]=off+x*.18+Math.sin(x*.02+t*.8+d.phase)*3.1;
+      p[i*3+1]=-12.65 + Math.sin(t*1.3+i*.14)*.13*strength;
+      p[i*3+2]=off+x*.18+Math.sin(x*.02+t*.8*speedBoost+d.phase)*3.55*strength;
     }
     line.geometry.attributes.position.needsUpdate=true;
+    line.material.opacity=Math.min(.62,.34+(strength-1)*.18);
   }
 
+  // Shore foam breathes and pulses automatically as waves reach the islands.
   shoreFoam.forEach((line,i)=>{
-    line.material.opacity=.62+.32*(.5+.5*Math.sin(t*2.1+i));
-    line.scale.setScalar(1+.008*Math.sin(t*1.5+i));
+    const pulse=.5+.5*Math.sin(t*2.25*speedBoost+i);
+    line.material.opacity=Math.min(1,.68+.25*pulse+(strength-1)*.12);
+    line.scale.setScalar(1+.010*Math.sin(t*1.65*speedBoost+i)*strength);
   });
 }
-
 
 const mats = {
   grass:new THREE.MeshStandardMaterial({color:0x73b959, roughness:.95}),
