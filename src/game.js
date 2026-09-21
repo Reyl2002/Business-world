@@ -379,9 +379,14 @@ const transitPoints = [
   [258,-250],[214,-211],[136,-190],[45,-192],[-45,-214],[-108,-254],[-137,-310],[-136,-365]
 ];
 const cruisePoints = [
-  [-560,-170],[-530,-225],[-470,-260],[-390,-276],[-305,-270],[-235,-235],[-200,-185],
-  [-190,-125],[-195,-65],[-185,-5],[-190,65],[-225,125],[-290,165],[-380,180],
-  [-470,165],[-535,120],[-570,55],[-578,-35],[-572,-105]
+  // Huge $50k resort island shaped to fill the large western water gap.
+  // The north-east shoulder reaches toward the Transit District, while the
+  // south-west beach lobe fills the large open water beside the starter city.
+  [-548,-220],[-532,-292],[-486,-340],[-410,-368],[-326,-360],[-252,-330],
+  [-188,-304],[-146,-274],[-132,-236],[-145,-202],[-174,-168],[-188,-112],
+  [-190,-46],[-184,22],[-191,88],[-214,138],[-252,166],[-300,178],
+  [-348,184],[-392,192],[-428,252],[-474,316],[-520,326],[-548,286],
+  [-565,218],[-565,136],[-558,52],[-562,-38],[-558,-126]
 ];
 
 createShoreFoam(mainPoints,1.055);
@@ -1873,6 +1878,36 @@ function createCruiseResort(cx,cz){
   g.add(poolIsland);
   palm(5,26,1.15);
 
+  // Large south-west beach club fills the new lower beach lobe.
+  const southBeach=new THREE.Mesh(new THREE.BoxGeometry(138,.42,82),sand);
+  southBeach.position.set(-116,.26,274);
+  g.add(southBeach);
+
+  const beachClubDeck=new THREE.Mesh(new THREE.BoxGeometry(58,.5,42),white);
+  beachClubDeck.position.set(-112,.52,270);
+  g.add(beachClubDeck);
+
+  const beachClubPool=new THREE.Mesh(new THREE.BoxGeometry(42,.32,27),poolMat);
+  beachClubPool.position.set(-112,.82,270);
+  g.add(beachClubPool);
+
+  const beachPavilion=new THREE.Mesh(new THREE.BoxGeometry(34,10,24),white);
+  beachPavilion.position.set(-55,5.3,255);
+  g.add(beachPavilion);
+  const beachPavilionRoof=new THREE.Mesh(new THREE.BoxGeometry(38,1.2,28),teal);
+  beachPavilionRoof.position.set(-55,10.9,255);
+  g.add(beachPavilionRoof);
+
+  for(const [px,pz] of [[-168,245],[-150,282],[-132,315],[-90,316],[-52,302],[-32,270],[-72,232]]){
+    palm(px,pz,1.02);
+  }
+
+  let southUmbrellaIndex=0;
+  for(const [ux,uz] of [[-166,292],[-145,306],[-124,300],[-102,315],[-78,300],[-45,289]]){
+    umbrella(ux,uz,umbColors[southUmbrellaIndex%umbColors.length]);
+    southUmbrellaIndex++;
+  }
+
   // Boardwalk / marina docks.
   for(const dx of [-42,0,42]){
     const pier=new THREE.Mesh(new THREE.BoxGeometry(10,.8,72),dockMat);
@@ -2054,7 +2089,7 @@ drawRevenueBubble(transitRevenueBubble,revenue);
 const cruiseResort=createCruiseResort(-380,-40);
 setCruiseLockedAppearance(cruiseResort,true);
 
-const cruiseRevenueBubble=createRevenueBubble('CRUISE ISLAND',50000,-380,78,-38);
+const cruiseRevenueBubble=createRevenueBubble('CRUISE ISLAND',50000,-405,82,-55);
 drawRevenueBubble(cruiseRevenueBubble,revenue);
 
 // Major expansion landscaping: a formal arrival park and future-development pads.
@@ -2596,7 +2631,7 @@ function animate(){
   const t=clock.elapsedTime;
   controls.update();
   // Keep free panning usable without letting the camera get permanently lost.
-  controls.target.x = THREE.MathUtils.clamp(controls.target.x,-650,430);
+  controls.target.x = THREE.MathUtils.clamp(controls.target.x,-710,430);
   controls.target.z = THREE.MathUtils.clamp(controls.target.z,-490,260);
   controls.target.y = THREE.MathUtils.clamp(controls.target.y,0,45);
   workers.forEach(w=>moveRoute(w,dt));
