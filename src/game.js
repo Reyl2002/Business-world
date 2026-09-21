@@ -11,6 +11,207 @@ const infoCard = document.getElementById('infoCard');
 const infoTitle = document.getElementById('infoTitle');
 const infoText = document.getElementById('infoText');
 
+const bankPanel = document.getElementById('bankPanel');
+const closeBank = document.getElementById('closeBank');
+const bankBusinessProfit = document.getElementById('bankBusinessProfit');
+const bankBusinessMargin = document.getElementById('bankBusinessMargin');
+const bankPersonalFree = document.getElementById('bankPersonalFree');
+const bankBillsTotal = document.getElementById('bankBillsTotal');
+const bankGoalProgress = document.getElementById('bankGoalProgress');
+const bankBusinessRevenue = document.getElementById('bankBusinessRevenue');
+const bankBusinessExpenses = document.getElementById('bankBusinessExpenses');
+const bankPersonalIncome = document.getElementById('bankPersonalIncome');
+const bankPersonalExpenses = document.getElementById('bankPersonalExpenses');
+const bankBillForm = document.getElementById('bankBillForm');
+const bankBillName = document.getElementById('bankBillName');
+const bankBillAmount = document.getElementById('bankBillAmount');
+const bankBillType = document.getElementById('bankBillType');
+const bankBillsList = document.getElementById('bankBillsList');
+const bankGoalForm = document.getElementById('bankGoalForm');
+const bankGoalName = document.getElementById('bankGoalName');
+const bankGoalType = document.getElementById('bankGoalType');
+const bankGoalTarget = document.getElementById('bankGoalTarget');
+const bankGoalCurrent = document.getElementById('bankGoalCurrent');
+const bankGoalMonthly = document.getElementById('bankGoalMonthly');
+const bankGoalsList = document.getElementById('bankGoalsList');
+const bankStrategies = document.getElementById('bankStrategies');
+
+const BANK_STORAGE_KEY='businessWorldBankV1';
+const emptyBankState=()=>({businessRevenue:0,businessExpenses:0,personalIncome:0,personalExpenses:0,bills:[],goals:[]});
+
+function cleanMoney(value){
+  const n=Number(value);
+  return Number.isFinite(n)?Math.max(0,n):0;
+}
+
+function loadBankState(){
+  try{
+    const raw=localStorage.getItem(BANK_STORAGE_KEY);
+    if(!raw) return emptyBankState();
+    const parsed=JSON.parse(raw);
+    return {
+      ...emptyBankState(),...parsed,
+      businessRevenue:cleanMoney(parsed.businessRevenue),
+      businessExpenses:cleanMoney(parsed.businessExpenses),
+      personalIncome:cleanMoney(parsed.personalIncome),
+      personalExpenses:cleanMoney(parsed.personalExpenses),
+      bills:Array.isArray(parsed.bills)?parsed.bills:[],
+      goals:Array.isArray(parsed.goals)?parsed.goals:[]
+    };
+  }catch{return emptyBankState();}
+}
+
+let bankState=loadBankState();
+function saveBankState(){try{localStorage.setItem(BANK_STORAGE_KEY,JSON.stringify(bankState));}catch{}}
+function bankMoney(n){return (Number.isFinite(Number(n))?Number(n):0).toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:0});}
+
+function bankMetrics(){
+  const businessBills=bankState.bills.filter(b=>b.type==='business').reduce((s,b)=>s+cleanMoney(b.amount),0);
+  const personalBills=bankState.bills.filter(b=>b.type==='personal').reduce((s,b)=>s+cleanMoney(b.amount),0);
+  const totalBills=businessBills+personalBills;
+  const businessProfit=bankState.businessRevenue-bankState.businessExpenses-businessBills;
+  const businessMargin=bankState.businessRevenue>0?(businessProfit/bankState.businessRevenue)*100:0;
+  const personalFree=bankState.personalIncome-bankState.personalExpenses-personalBills;
+  const totalTarget=bankState.goals.reduce((s,g)=>s+cleanMoney(g.target),0);
+  const totalCurrent=bankState.goals.reduce((s,g)=>s+Math.min(cleanMoney(g.current),cleanMoney(g.target)),0);
+  const goalProgress=totalTarget>0?(totalCurrent/totalTarget)*100:0;
+  return {businessBills,personalBills,totalBills,businessProfit,businessMargin,personalFree,goalProgress};
+}
+
+function safeBankText(v){return String(v||'').replace(/[<>]/g,'');}
+
+function renderBankDashboard(){
+  const m=bankMetrics();
+  bankBusinessRevenue.value=bankState.businessRevenue||'';
+  bankBusinessExpenses.value=bankState.businessExpenses||'';
+  bankPersonalIncome.value=bankState.personalIncome||'';
+  bankPersonalExpenses.value=bankState.personalExpenses||'';
+
+  bankBusinessProfit.textContent=bankMoney(m.businessProfit);
+  bankBusinessProfit.style.color=m.businessProfit<0?'#b64a43':'#18384f';
+  bankBusinessMargin.textContent=m.businessMargin.toFixed(1)+'% margin';
+  bankPersonalFree.textContent=bankMoney(m.personalFree);
+  bankPersonalFree.style.color=m.personalFree<0?'#b64a43':'#18384f';
+  bankBillsTotal.textContent=bankMoney(m.totalBills);
+  bankGoalProgress.textContent=Math.round(m.goalProgress)+'%';
+
+  bankBillsList.innerHTML=bankState.bills.length?bankState.bills.map(b=>`
+    <div class="bank-row">
+      <div class="bank-row-main"><b>${safeBankText(b.name)}</b><small>${b.type==='business'?'Business':'Personal'} · monthly</small></div>
+      <strong>${bankMoney(cleanMoney(b.amount))}</strong>
+      <button class="bank-remove" type="button" data-remove-bill="${b.id}" aria-label="Remove bill">×</button>
+    </div>`).join(''):'<div class="bank-empty">No bills added yet.</div>';
+
+  bankGoalsList.innerHTML=bankState.goals.length?bankState.goals.map(g=>{
+    const target=Math.max(1,cleanMoney(g.target));
+    const current=Math.min(cleanMoney(g.current),target);
+    const pct=Math.min(100,current/target*100);
+    const remaining=Math.max(0,target-current);
+    const monthly=cleanMoney(g.monthly);
+    const eta=remaining===0?'Complete':monthly>0?Math.ceil(remaining/monthly)+' mo':'Set monthly amount';
+    return `<div class="bank-row">
+      <div class="bank-row-main"><b>${safeBankText(g.name)}</b><small>${g.type==='business'?'Business':'Personal'} · ${bankMoney(current)} of ${bankMoney(target)} · ${eta}</small>
+      <div class="bank-goal-progress"><i style="width:${pct.toFixed(1)}%"></i></div></div>
+      <strong>${Math.round(pct)}%</strong>
+      <button class="bank-remove" type="button" data-remove-goal="${g.id}" aria-label="Remove goal">×</button>
+    </div>`;
+  }).join(''):'<div class="bank-empty">No goals added yet.</div>';
+
+  const strategies=[];
+  if(bankState.businessRevenue<=0 && bankState.personalIncome<=0){
+    strategies.push('<b>Start here:</b> enter monthly business revenue and/or personal income. The bank will calculate margins, money left after bills, and goal timing.');
+  }
+  if(bankState.businessRevenue>0){
+    if(m.businessProfit<0) strategies.push('<b>Business:</b> expenses are above revenue by '+bankMoney(Math.abs(m.businessProfit))+'. Review recurring costs first, then pricing or sales volume before funding expansion goals.');
+    else if(m.businessMargin<10) strategies.push('<b>Business margin:</b> '+m.businessMargin.toFixed(1)+'% is tight. Review the largest bills and protect margin before adding more fixed costs.');
+    else if(m.businessMargin<20) strategies.push('<b>Business margin:</b> '+m.businessMargin.toFixed(1)+'%. Growth is possible, but keep recurring costs growing slower than profit.');
+    else strategies.push('<b>Business margin:</b> '+m.businessMargin.toFixed(1)+'%. Consider splitting profit between growth goals and a reserve for slower months.');
+  }
+  if(bankState.personalIncome>0){
+    if(m.personalFree<0) strategies.push('<b>Personal cash flow:</b> spending is above income by '+bankMoney(Math.abs(m.personalFree))+'. Reducing recurring bills will improve goal timing fastest.');
+    else strategies.push('<b>Personal cash flow:</b> '+bankMoney(m.personalFree)+' remains after the entered monthly costs. Keep a buffer before assigning all of it to goals.');
+  }
+
+  const businessGoal=bankState.goals.find(g=>g.type==='business'&&cleanMoney(g.current)<cleanMoney(g.target));
+  if(businessGoal&&m.businessProfit>0){
+    const suggested=Math.max(1,Math.round(m.businessProfit*.2));
+    const remaining=Math.max(0,cleanMoney(businessGoal.target)-cleanMoney(businessGoal.current));
+    strategies.push('<b>'+safeBankText(businessGoal.name)+':</b> using about '+bankMoney(suggested)+'/mo (20% of current business profit) would cover the remaining '+bankMoney(remaining)+' in roughly '+Math.ceil(remaining/suggested)+' months.');
+  }
+
+  const personalGoal=bankState.goals.find(g=>g.type==='personal'&&cleanMoney(g.current)<cleanMoney(g.target));
+  if(personalGoal&&m.personalFree>0){
+    const suggested=Math.max(1,Math.round(m.personalFree*.25));
+    const remaining=Math.max(0,cleanMoney(personalGoal.target)-cleanMoney(personalGoal.current));
+    strategies.push('<b>'+safeBankText(personalGoal.name)+':</b> using about '+bankMoney(suggested)+'/mo (25% of current free cash) would cover the remaining '+bankMoney(remaining)+' in roughly '+Math.ceil(remaining/suggested)+' months.');
+  }
+
+  if(m.totalBills>0){
+    const totalIncome=bankState.businessRevenue+bankState.personalIncome;
+    if(totalIncome>0) strategies.push('<b>Recurring bill load:</b> entered bills are about '+(m.totalBills/totalIncome*100).toFixed(0)+'% of combined monthly income/revenue.');
+  }
+
+  bankStrategies.innerHTML=(strategies.length?strategies:['Add bills and goals to generate a monthly strategy.'])
+    .map(s=>'<div class="bank-strategy">'+s+'</div>').join('');
+}
+
+function openBankPanel(){
+  infoCard.classList.remove('show');
+  bankPanel.classList.add('show');
+  bankPanel.setAttribute('aria-hidden','false');
+  controls.enabled=false;
+  renderBankDashboard();
+}
+function closeBankPanel(){
+  bankPanel.classList.remove('show');
+  bankPanel.setAttribute('aria-hidden','true');
+  controls.enabled=true;
+}
+
+function syncBankNumber(field,key){
+  field.addEventListener('input',()=>{
+    bankState[key]=cleanMoney(field.value);
+    saveBankState();
+    renderBankDashboard();
+  });
+}
+syncBankNumber(bankBusinessRevenue,'businessRevenue');
+syncBankNumber(bankBusinessExpenses,'businessExpenses');
+syncBankNumber(bankPersonalIncome,'personalIncome');
+syncBankNumber(bankPersonalExpenses,'personalExpenses');
+
+bankBillForm.addEventListener('submit',e=>{
+  e.preventDefault();
+  const name=bankBillName.value.trim(), amount=cleanMoney(bankBillAmount.value);
+  if(!name||amount<=0) return;
+  bankState.bills.push({id:'bill-'+Date.now()+'-'+Math.floor(Math.random()*10000),name,amount,type:bankBillType.value==='business'?'business':'personal'});
+  bankBillForm.reset(); saveBankState(); renderBankDashboard();
+});
+
+bankGoalForm.addEventListener('submit',e=>{
+  e.preventDefault();
+  const name=bankGoalName.value.trim(), target=cleanMoney(bankGoalTarget.value);
+  if(!name||target<=0) return;
+  bankState.goals.push({
+    id:'goal-'+Date.now()+'-'+Math.floor(Math.random()*10000),name,
+    type:bankGoalType.value==='business'?'business':'personal',
+    target,current:Math.min(cleanMoney(bankGoalCurrent.value),target),monthly:cleanMoney(bankGoalMonthly.value)
+  });
+  bankGoalForm.reset(); saveBankState(); renderBankDashboard();
+});
+
+bankBillsList.addEventListener('click',e=>{
+  const id=e.target?.dataset?.removeBill; if(!id)return;
+  bankState.bills=bankState.bills.filter(b=>b.id!==id); saveBankState(); renderBankDashboard();
+});
+bankGoalsList.addEventListener('click',e=>{
+  const id=e.target?.dataset?.removeGoal; if(!id)return;
+  bankState.goals=bankState.goals.filter(g=>g.id!==id); saveBankState(); renderBankDashboard();
+});
+closeBank.addEventListener('click',closeBankPanel);
+window.addEventListener('keydown',e=>{if(e.key==='Escape'&&bankPanel.classList.contains('show'))closeBankPanel();});
+renderBankDashboard();
+
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
 renderer.setSize(innerWidth, innerHeight, false);
@@ -1647,6 +1848,1871 @@ function building({name,x,z,w=22,d=18,h=22,color=0x7fadd3,accent=0x315c7b,descri
       skylight.rotation.z=sx*.12;
       skylight.position.set(sx*w*.22,h+5.7,0);
       g.add(skylight);
+    }
+  } else if(style==='bank'){
+    g.userData.financeCenter=true;
+    const bankStone=new THREE.MeshStandardMaterial({color:0xe7e1d2,roughness:.62});
+    const bankGold=new THREE.MeshStandardMaterial({color:0xd2a53a,roughness:.3,metalness:.35});
+    const frontWing=new THREE.Mesh(new THREE.BoxGeometry(w*.82,h*.5,4.5),bankStone);
+    frontWing.position.set(0,h*.32+2.2,d/2+1.8); frontWing.castShadow=true; g.add(frontWing);
+    for(const sx of [-7,-2.4,2.4,7]){
+      const column=new THREE.Mesh(new THREE.CylinderGeometry(.72,.9,10,14),bankStone);
+      column.position.set(sx,6.6,d/2+4.3); column.castShadow=true; g.add(column);
+    }
+    const bankGlass=new THREE.Mesh(new THREE.BoxGeometry(w*.34,8,.45),glassMat);
+    bankGlass.position.set(0,6.5,d/2+4.55); g.add(bankGlass);
+    const pediment=new THREE.Mesh(new THREE.ConeGeometry(w*.34,6,4),bankStone);
+    pediment.rotation.y=Math.PI/4; pediment.scale.z=.32; pediment.position.set(0,13.4,d/2+3.2); g.add(pediment);
+    const coin=new THREE.Mesh(new THREE.CylinderGeometry(4.1,4.1,1.0,28),bankGold);
+    coin.rotation.x=Math.PI/2; coin.position.set(0,h+7.2,0); coin.castShadow=true; g.add(coin);
+    const dollar=spriteLabel('
+    wingL.position.set(-w*.48,h*.29+2.4,0);
+    wingL.castShadow=true;
+    g.add(wingL);
+    const wingR=wingL.clone();
+    wingR.position.x=w*.48;
+    g.add(wingR);
+    const tower=new THREE.Mesh(new THREE.BoxGeometry(7,h*.65,7),accentMat);
+    tower.position.set(0,h*.6+2.3,-1);
+    g.add(tower);
+    const clock=new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.6,.25,24),trimMat);
+    clock.rotation.x=Math.PI/2;
+    clock.position.set(0,h*.74+2.3,d/2+.2);
+    g.add(clock);
+  }
+
+  const sign=spriteLabel(name);
+  sign.position.set(0,h*.67+2,d/2+1.15);
+  sign.scale.multiplyScalar(Math.min(1.12,Math.max(.7,w/25)));
+  g.add(sign);
+
+  scene.add(g);
+  clickable.push(g);
+  return g;
+}
+
+function createAirportTerminal(x,z){
+  createLotBase(x,z,8,6);
+  const g=new THREE.Group();
+  g.position.set(x,.25,z);
+  g.userData={
+    name:'Airport',
+    description:'Business World International Airport. A full passenger terminal with departures, arrivals, drop-off lanes, gates and control tower.',
+    gridLot:true,footprint:8,footprintZ:6,style:'airport'
+  };
+
+  const white=new THREE.MeshStandardMaterial({color:0xeeeae1,roughness:.55});
+  const dark=new THREE.MeshStandardMaterial({color:0x26343f,roughness:.48});
+  const blue=new THREE.MeshStandardMaterial({color:0x3b78a5,roughness:.45});
+  const navy=new THREE.MeshStandardMaterial({color:0x244f72,roughness:.42});
+  const glass=new THREE.MeshPhysicalMaterial({color:0x7ed7f0,roughness:.12,transparent:true,opacity:.82,transmission:.12,clearcoat:.5});
+  const silver=new THREE.MeshStandardMaterial({color:0xbfc8cc,roughness:.3,metalness:.28});
+  const green=new THREE.MeshStandardMaterial({color:0x4f9d55,roughness:1});
+  const asphalt=new THREE.MeshStandardMaterial({color:0x3f474d,roughness:.95});
+  const curb=new THREE.MeshStandardMaterial({color:0xd7d4cb,roughness:.9});
+  const yellow=new THREE.MeshStandardMaterial({color:0xf0c64a,roughness:.7});
+  const red=new THREE.MeshStandardMaterial({color:0xd55b4e,roughness:.65});
+
+  // Larger terminal campus.
+  const pad=new THREE.Mesh(new THREE.BoxGeometry(104,.7,76),white);
+  pad.position.y=.35; pad.receiveShadow=true; g.add(pad);
+
+  // Main terminal.
+  const terminal=new THREE.Mesh(new THREE.BoxGeometry(72,17,34),white);
+  terminal.position.set(5,9.4,-2);
+  terminal.castShadow=true; g.add(terminal);
+
+  // Two terminal side wings make it feel like a real multi-gate airport.
+  const wingL=new THREE.Mesh(new THREE.BoxGeometry(30,12,25),white);
+  wingL.position.set(-42,6.8,-8);
+  wingL.castShadow=true; g.add(wingL);
+
+  const wingR=new THREE.Mesh(new THREE.BoxGeometry(29,12,25),white);
+  wingR.position.set(48,6.8,-8);
+  wingR.castShadow=true; g.add(wingR);
+
+  // Front glass curtain wall.
+  const frontGlass=new THREE.Mesh(new THREE.BoxGeometry(60,10,.55),glass);
+  frontGlass.position.set(5,9.1,15.3); g.add(frontGlass);
+
+  for(const sx of [-22,-10,2,14,26]){
+    const mullion=new THREE.Mesh(new THREE.BoxGeometry(.55,10,.72),silver);
+    mullion.position.set(sx,9.1,15.65);
+    g.add(mullion);
+  }
+
+  // Large entrance lobby / departures frontage.
+  const entranceBox=new THREE.Mesh(new THREE.BoxGeometry(34,8,8),glass);
+  entranceBox.position.set(5,5.1,22);
+  entranceBox.castShadow=true;
+  g.add(entranceBox);
+
+  // Automatic terminal doors.
+  for(const dx of [-10,-3.3,3.3,10]){
+    const door=new THREE.Mesh(new THREE.BoxGeometry(4.8,5,.34),dark);
+    door.position.set(5+dx,4.5,26.2);
+    g.add(door);
+  }
+
+  // Curved-looking layered entrance canopy.
+  const canopy=new THREE.Mesh(new THREE.BoxGeometry(52,1.2,8.5),blue);
+  canopy.position.set(5,9.0,25.5); g.add(canopy);
+  const canopyLip=new THREE.Mesh(new THREE.BoxGeometry(57,.55,2.2),navy);
+  canopyLip.position.set(5,8.55,29); g.add(canopyLip);
+
+  // Departures and arrivals signs.
+  const departures=spriteLabel('DEPARTURES','#214f75');
+  departures.scale.multiplyScalar(.58);
+  departures.position.set(-9,11.5,26.8);
+  g.add(departures);
+
+  const arrivals=spriteLabel('ARRIVALS','#2f7a62');
+  arrivals.scale.multiplyScalar(.52);
+  arrivals.position.set(20,11.5,26.8);
+  g.add(arrivals);
+
+  // Rooftop structure and ribs.
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(77,1.1,37),dark);
+  roof.position.set(5,18.2,-2); g.add(roof);
+
+  for(const sx of [-24,-12,0,12,24,36]){
+    const rib=new THREE.Mesh(new THREE.TorusGeometry(8.5,.42,10,28,Math.PI),silver);
+    rib.rotation.z=Math.PI/2;
+    rib.rotation.y=Math.PI/2;
+    rib.position.set(sx+1,19.7,-2);
+    g.add(rib);
+  }
+
+  // Passenger drop-off road in front of terminal.
+  const dropRoad=new THREE.Mesh(new THREE.BoxGeometry(95,.32,11),asphalt);
+  dropRoad.position.set(4,.45,37);
+  dropRoad.receiveShadow=true;
+  g.add(dropRoad);
+
+  for(const laneZ of [34.5,39.5]){
+    for(let dx=-38;dx<43;dx+=13){
+      const dash=new THREE.Mesh(new THREE.BoxGeometry(6,.08,.42),yellow);
+      dash.position.set(dx,.66,laneZ);
+      g.add(dash);
+    }
+  }
+
+  // Arrival/departure curb and pedestrian forecourt.
+  const terminalCurb=new THREE.Mesh(new THREE.BoxGeometry(90,.35,3.1),curb);
+  terminalCurb.position.set(4,.7,30.8);
+  g.add(terminalCurb);
+
+  const forecourt=new THREE.Mesh(new THREE.BoxGeometry(90,.3,10),curb);
+  forecourt.position.set(4,.5,47);
+  g.add(forecourt);
+
+  // Covered pedestrian canopy supports.
+  for(const sx of [-32,-20,-8,4,16,28,40]){
+    const post=new THREE.Mesh(new THREE.CylinderGeometry(.25,.3,6.5,8),silver);
+    post.position.set(sx,3.6,31.8);
+    g.add(post);
+  }
+
+  // Small decorative entrance planters.
+  for(const sx of [-39,-27,35,47]){
+    const planter=new THREE.Mesh(new THREE.BoxGeometry(5,1.2,5),curb);
+    planter.position.set(sx,1.1,48);
+    g.add(planter);
+    const shrub=new THREE.Mesh(new THREE.IcosahedronGeometry(1.8,1),green);
+    shrub.position.set(sx,3.0,48);
+    g.add(shrub);
+  }
+
+  // Control tower moved beside terminal apron.
+  const towerBase=new THREE.Mesh(new THREE.CylinderGeometry(3.4,4.5,23,16),silver);
+  towerBase.position.set(50,25,-17); g.add(towerBase);
+  const towerCab=new THREE.Mesh(new THREE.CylinderGeometry(7,6.1,6.2,16),glass);
+  towerCab.position.set(50,39.5,-17); g.add(towerCab);
+  const towerRoof=new THREE.Mesh(new THREE.CylinderGeometry(7.5,7.5,.9,16),dark);
+  towerRoof.position.set(50,43,-17); g.add(towerRoof);
+
+  // Multiple jet bridges / gates on the apron side.
+  for(const sx of [-48,-28,-8,12,32]){
+    const gateRoot=new THREE.Mesh(new THREE.BoxGeometry(8,4.4,6.2),silver);
+    gateRoot.position.set(sx,5.8,-22.5);
+    g.add(gateRoot);
+
+    const bridgeArm=new THREE.Mesh(new THREE.BoxGeometry(10,3.4,4.2),silver);
+    bridgeArm.position.set(sx,5.5,-29.5);
+    g.add(bridgeArm);
+
+    const gateDoor=new THREE.Mesh(new THREE.BoxGeometry(5.4,3.1,.4),dark);
+    gateDoor.position.set(sx,5.5,-31.8);
+    g.add(gateDoor);
+  }
+
+  // Roof lights.
+  for(const sx of [-30,-15,0,15,30]){
+    const light=new THREE.PointLight(0x8edfff,1.2,24,2);
+    light.position.set(sx,22,5);
+    g.add(light);
+  }
+
+  // Main terminal signage.
+  const sign=spriteLabel('BW INTERNATIONAL AIRPORT','#173d59');
+  sign.scale.multiplyScalar(.92);
+  sign.position.set(5,14.8,17.2);
+  g.add(sign);
+
+  scene.add(g);
+  clickable.push(g);
+  return g;
+}
+
+function createThinkHub(x,z){
+  createLotBase(x,z,5,5);
+  const g=new THREE.Group();
+  g.position.set(x,.25,z);
+  g.userData={
+    name:'Think Hub',
+    description:'The city’s idea and brainstorming center, where agents develop strategy, automation and new business concepts.',
+    gridLot:true,
+    footprint:5,
+    footprintZ:5
+  };
+
+  const stone=new THREE.MeshStandardMaterial({color:0xe9eceb,roughness:.7});
+  const white=new THREE.MeshStandardMaterial({color:0xf8f7f3,roughness:.62});
+  const wood=new THREE.MeshStandardMaterial({color:0x9b6747,roughness:.72});
+  const dark=new THREE.MeshStandardMaterial({color:0x23323b,roughness:.55,metalness:.08});
+  const glass=new THREE.MeshPhysicalMaterial({color:0x75cde8,roughness:.18,transparent:true,opacity:.78,transmission:.12,clearcoat:.35});
+  const gold=new THREE.MeshStandardMaterial({color:0xe9b83f,roughness:.35,metalness:.25,emissive:0x8d5b00,emissiveIntensity:.22});
+  const glow=new THREE.MeshStandardMaterial({color:0xffe06a,emissive:0xffb000,emissiveIntensity:2.1,roughness:.28});
+
+  const pad=new THREE.Mesh(new THREE.BoxGeometry(34,.7,29),stone);
+  pad.position.y=.35; pad.receiveShadow=true; g.add(pad);
+
+  const leftWing=new THREE.Mesh(new THREE.BoxGeometry(10,18,20),white);
+  leftWing.position.set(-11,9.6,0); leftWing.castShadow=true; g.add(leftWing);
+
+  const rightWing=new THREE.Mesh(new THREE.BoxGeometry(10,18,20),white);
+  rightWing.position.set(11,9.6,0); rightWing.castShadow=true; g.add(rightWing);
+
+  const woodPanel=new THREE.Mesh(new THREE.BoxGeometry(7,14,.5),wood);
+  woodPanel.position.set(-11,9.5,10.25); g.add(woodPanel);
+
+  const atrium=new THREE.Mesh(new THREE.CylinderGeometry(8.6,8.6,20,28,1,false,Math.PI*.5,Math.PI),glass);
+  atrium.rotation.y=Math.PI/2;
+  atrium.position.set(0,10.5,8.7);
+  atrium.castShadow=true; g.add(atrium);
+
+  const atriumCore=new THREE.Mesh(new THREE.CylinderGeometry(8.05,8.05,19.2,28),dark);
+  atriumCore.material.transparent=true; atriumCore.material.opacity=.12;
+  atriumCore.position.set(0,10.4,6.8); g.add(atriumCore);
+
+  const roof=new THREE.Mesh(new THREE.CylinderGeometry(13.4,13.4,1.1,40),dark);
+  roof.position.y=19.7; g.add(roof);
+
+  const goldRing=new THREE.Mesh(new THREE.TorusGeometry(9.4,.7,14,48),gold);
+  goldRing.rotation.x=Math.PI/2;
+  goldRing.position.y=20.6; g.add(goldRing);
+
+  const terraceL=new THREE.Mesh(new THREE.BoxGeometry(9,.55,7),stone);
+  terraceL.position.set(-10.5,18.8,-5); g.add(terraceL);
+  const terraceR=terraceL.clone(); terraceR.position.x=10.5; g.add(terraceR);
+
+  for(const [tx,tz] of [[-13,-7],[-9,-8],[10,-8],[14,-6],[-14,7],[14,7]]){
+    const pot=new THREE.Mesh(new THREE.BoxGeometry(1.8,1.3,1.8),stone);
+    pot.position.set(tx,19.4,tz); g.add(pot);
+    const bush=new THREE.Mesh(new THREE.IcosahedronGeometry(1.5,1),new THREE.MeshStandardMaterial({color:0x4a9a4d,roughness:1}));
+    bush.position.set(tx,21,tz); bush.castShadow=true; g.add(bush);
+  }
+
+  const bulbBase=new THREE.Mesh(new THREE.CylinderGeometry(4.2,5,4.5,24),gold);
+  bulbBase.position.y=23.3; bulbBase.castShadow=true; g.add(bulbBase);
+
+  const bulbGlass=new THREE.Mesh(
+    new THREE.SphereGeometry(7.3,32,22),
+    new THREE.MeshPhysicalMaterial({color:0xfff2b5,transparent:true,opacity:.32,roughness:.08,transmission:.55,clearcoat:.5})
+  );
+  bulbGlass.scale.y=1.12;
+  bulbGlass.position.y=31.2;
+  g.add(bulbGlass);
+
+  const filamentStem=new THREE.Mesh(new THREE.CylinderGeometry(.32,.32,6.5,12),glow);
+  filamentStem.position.y=28.8; g.add(filamentStem);
+
+  const loop=new THREE.Mesh(new THREE.TorusGeometry(2.7,.34,12,32,Math.PI*1.45),glow);
+  loop.rotation.z=Math.PI*.78;
+  loop.position.set(0,31.6,.3); g.add(loop);
+
+  const bulbLight=new THREE.PointLight(0xffc93f,4.2,85,2);
+  bulbLight.position.set(0,31,0); g.add(bulbLight);
+
+  const canopy=new THREE.Mesh(new THREE.BoxGeometry(10,1.0,4.8),gold);
+  canopy.position.set(0,8.5,12); g.add(canopy);
+
+  const entrance=new THREE.Mesh(new THREE.BoxGeometry(7.2,7.2,.45),glass);
+  entrance.position.set(0,4.6,14.3); g.add(entrance);
+
+  const sign=spriteLabel('THINK HUB','#1c2b34');
+  sign.position.set(0,11.2,13.4);
+  sign.scale.multiplyScalar(.82);
+  g.add(sign);
+
+  const ideaPlaque=spriteLabel('IDEAS  •  PEOPLE  •  PROGRESS','#6f503d');
+  ideaPlaque.position.set(-11,13,10.7);
+  ideaPlaque.scale.multiplyScalar(.48);
+  g.add(ideaPlaque);
+
+  for(const sx of [-14,-10,-6,6,10,14]){
+    const lampPost=new THREE.Mesh(new THREE.CylinderGeometry(.12,.16,3.3,8),dark);
+    lampPost.position.set(sx,1.9,14.2); g.add(lampPost);
+    const lamp=new THREE.Mesh(new THREE.SphereGeometry(.35,10,8),glow);
+    lamp.position.set(sx,3.8,14.2); g.add(lamp);
+  }
+
+  scene.add(g);
+  clickable.push(g);
+  return g;
+}
+
+
+function createTransitStation(x,z){
+  const g=new THREE.Group();
+  g.position.set(x,.25,z);
+  g.userData={
+    name:'Underground Central Station',
+    description:'Locked Transit District. Unlocks when city revenue reaches $25,000.',
+    gridLot:true,
+    footprint:7,
+    footprintZ:6,
+    style:'transit'
+  };
+
+  const stone=new THREE.MeshStandardMaterial({color:0xe7e3da,roughness:.62});
+  const dark=new THREE.MeshStandardMaterial({color:0x202d38,roughness:.45});
+  const blue=new THREE.MeshStandardMaterial({color:0x2b7898,roughness:.4});
+  const silver=new THREE.MeshStandardMaterial({color:0xaebbc2,roughness:.3,metalness:.25});
+  const glass=new THREE.MeshPhysicalMaterial({color:0x6dcde9,roughness:.12,transparent:true,opacity:.82,transmission:.12,clearcoat:.55});
+  const railMat=new THREE.MeshStandardMaterial({color:0x33383c,roughness:.42,metalness:.48});
+  const sleeperMat=new THREE.MeshStandardMaterial({color:0x73513c,roughness:.8});
+  const yellowMat=new THREE.MeshStandardMaterial({color:0xf2c74d,roughness:.48});
+  const green=new THREE.MeshStandardMaterial({color:0x4b9851,roughness:1});
+
+  // Large civic plaza and station hall.
+  const plaza=new THREE.Mesh(new THREE.BoxGeometry(94,.65,73),stone);
+  plaza.position.set(0,.32,12);
+  plaza.receiveShadow=true;
+  g.add(plaza);
+
+  const hall=new THREE.Mesh(new THREE.BoxGeometry(58,18,31),stone);
+  hall.position.set(0,9.5,27);
+  hall.castShadow=true;
+  hall.receiveShadow=true;
+  g.add(hall);
+
+  const glassFront=new THREE.Mesh(new THREE.BoxGeometry(44,11,.45),glass);
+  glassFront.position.set(0,10.2,42.7);
+  g.add(glassFront);
+
+  // Curved premium roof, inspired by a modern metro/rail terminal.
+  for(const sx of [-23,-15,-7,1,9,17,25]){
+    const rib=new THREE.Mesh(new THREE.TorusGeometry(10.5,.45,10,30,Math.PI),silver);
+    rib.rotation.z=Math.PI/2;
+    rib.rotation.y=Math.PI/2;
+    rib.position.set(sx,20.3,27);
+    g.add(rib);
+  }
+  const roofSpine=new THREE.Mesh(new THREE.BoxGeometry(58,1.1,6),dark);
+  roofSpine.position.set(0,22.1,27);
+  g.add(roofSpine);
+
+  // Main underground entrance with stairs/escalator canopy.
+  const entranceBox=new THREE.Mesh(new THREE.BoxGeometry(22,7,15),dark);
+  entranceBox.position.set(-24,4.0,49);
+  g.add(entranceBox);
+  const entranceGlass=new THREE.Mesh(new THREE.BoxGeometry(17,5,.4),glass);
+  entranceGlass.position.set(-24,4.2,56.7);
+  g.add(entranceGlass);
+  const entranceCanopy=new THREE.Mesh(new THREE.BoxGeometry(25,.85,18),blue);
+  entranceCanopy.position.set(-24,8.0,49);
+  g.add(entranceCanopy);
+  for(let i=0;i<6;i++){
+    const step=new THREE.Mesh(new THREE.BoxGeometry(14,.36,1.7),stone);
+    step.position.set(-24,.45+i*.34,56-i*1.15);
+    g.add(step);
+  }
+
+  // Surface platform and visible rail segment before the train drops underground.
+  const platform=new THREE.Mesh(new THREE.BoxGeometry(138,.7,11),stone);
+  platform.position.set(0,.4,-4);
+  g.add(platform);
+  const safety=new THREE.Mesh(new THREE.BoxGeometry(136,.14,.65),yellowMat);
+  safety.position.set(0,.82,-9.0);
+  g.add(safety);
+
+  for(const rz of [-2.05,2.05]){
+    const rail=new THREE.Mesh(new THREE.BoxGeometry(164,.32,.34),railMat);
+    rail.position.set(0,.44,rz-17);
+    g.add(rail);
+  }
+  for(let xx=-80;xx<=80;xx+=4.6){
+    const tie=new THREE.Mesh(new THREE.BoxGeometry(.42,.22,6.2),sleeperMat);
+    tie.position.set(xx,.25,-17);
+    g.add(tie);
+  }
+
+  // Two tunnel mouths make it clear the rail line dives underground in both directions.
+  for(const sx of [-82,82]){
+    const portal=new THREE.Mesh(new THREE.BoxGeometry(12,9,11),dark);
+    portal.position.set(sx,4.2,-17);
+    g.add(portal);
+    const portalGlass=new THREE.Mesh(new THREE.PlaneGeometry(8.6,6.1),new THREE.MeshBasicMaterial({color:0x07131d}));
+    portalGlass.rotation.y=sx<0?Math.PI/2:-Math.PI/2;
+    portalGlass.position.set(sx+(sx<0?6.05:-6.05),4.2,-17);
+    g.add(portalGlass);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(13.5,1.0,12.5),silver);
+    cap.position.set(sx,9.1,-17);
+    g.add(cap);
+  }
+
+  // Small parking/service court, sidewalks and landscaping.
+  const parking=new THREE.Mesh(new THREE.BoxGeometry(47,.32,23),new THREE.MeshStandardMaterial({color:0x3d4449,roughness:.93}));
+  parking.position.set(49,.22,37);
+  g.add(parking);
+  for(let px=31;px<=67;px+=9){
+    const stripe=new THREE.Mesh(new THREE.BoxGeometry(.22,.08,18),new THREE.MeshStandardMaterial({color:0xf4f1e7,roughness:.8}));
+    stripe.position.set(px,.43,37);
+    g.add(stripe);
+  }
+  for(const [tx,tz] of [[-42,30],[-42,47],[39,17],[65,18],[70,50],[-5,52]]){
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.32,.48,3.2,8),new THREE.MeshStandardMaterial({color:0x77513b,roughness:1}));
+    trunk.position.set(tx,1.8,tz);
+    g.add(trunk);
+    const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(2.2,1),green);
+    crown.position.set(tx,5,tz);
+    crown.castShadow=true;
+    g.add(crown);
+  }
+
+  // Animated metro train.
+  const train=new THREE.Group();
+  train.position.set(-88,-4,-17);
+  const trainBody=new THREE.MeshStandardMaterial({color:0xd8e0e4,roughness:.35,metalness:.18});
+  const trainBlue=new THREE.MeshStandardMaterial({color:0x176d9a,roughness:.38});
+  const trainWindow=new THREE.MeshStandardMaterial({color:0x17394b,emissive:0x0d3447,emissiveIntensity:.55,roughness:.22});
+  for(let carIndex=0;carIndex<4;carIndex++){
+    const carX=-18+carIndex*12;
+    const body=new THREE.Mesh(new THREE.BoxGeometry(10.7,4.6,5.2),trainBody);
+    body.position.set(carX,2.8,0);
+    body.castShadow=true;
+    train.add(body);
+    const stripe=new THREE.Mesh(new THREE.BoxGeometry(10.9,.75,5.35),trainBlue);
+    stripe.position.set(carX,2.25,0);
+    train.add(stripe);
+    for(const wz of [-2.68,2.68]){
+      for(const wx of [-3.4,0,3.4]){
+        const win=new THREE.Mesh(new THREE.BoxGeometry(2.25,1.35,.12),trainWindow);
+        win.position.set(carX+wx,3.45,wz);
+        train.add(win);
+      }
+    }
+  }
+  const head=new THREE.Mesh(new THREE.BoxGeometry(2.2,3.2,4.7),trainBlue);
+  head.position.set(25,2.8,0);
+  train.add(head);
+  train.visible=false;
+  g.add(train);
+
+  const sign=spriteLabel('UNDERGROUND CENTRAL','#173b55');
+  sign.position.set(0,14.2,43.3);
+  sign.scale.multiplyScalar(.86);
+  g.add(sign);
+
+  const subwaySign=spriteLabel('TRAIN  •  METRO  •  $25K DISTRICT','#225f7d');
+  subwaySign.position.set(-24,10.5,50);
+  subwaySign.scale.multiplyScalar(.53);
+  g.add(subwaySign);
+
+  // Save the station's normal colors so the whole district can appear grey while locked.
+  g.traverse(o=>{
+    if(o.isSprite) return;
+    const materials=Array.isArray(o.material)?o.material:[o.material];
+    materials.filter(Boolean).forEach(m=>{
+      if(m.color && m.userData.transitOriginalColor===undefined){
+        m.userData.transitOriginalColor=m.color.getHex();
+      }
+    });
+  });
+
+  g.userData.train=train;
+  scene.add(g);
+  clickable.push(g);
+  return g;
+}
+
+function setTransitStationLockedAppearance(station,locked){
+  station.traverse(o=>{
+    if(o.isSprite) return;
+    const materials=Array.isArray(o.material)?o.material:[o.material];
+    materials.filter(Boolean).forEach(m=>{
+      if(!m.color) return;
+      if(locked){
+        if(m.userData.transitOriginalColor===undefined) m.userData.transitOriginalColor=m.color.getHex();
+        m.color.setHex(0x747a7e);
+      }else if(m.userData.transitOriginalColor!==undefined){
+        m.color.setHex(m.userData.transitOriginalColor);
+      }
+    });
+  });
+}
+
+let transitTrainPhase=0;
+function updateTransitTrain(dt){
+  if(!transitUnlocked || !transitStation?.userData?.train) return;
+  const train=transitStation.userData.train;
+  transitTrainPhase=(transitTrainPhase+dt)%22;
+
+  // Wait underground briefly, then emerge, pass the station, and descend again.
+  if(transitTrainPhase<2 || transitTrainPhase>20){
+    train.visible=false;
+    return;
+  }
+
+  train.visible=true;
+  const u=(transitTrainPhase-2)/18;
+  const x=-92 + 184*u;
+  let y=1.5;
+  if(u<.13) y=-5+(u/.13)*6.5;
+  else if(u>.87) y=1.5-((u-.87)/.13)*6.5;
+
+  train.position.x=x;
+  train.position.y=y;
+  train.rotation.y=0;
+}
+
+
+function createCruiseResort(cx,cz){
+  const g=new THREE.Group();
+  g.position.set(cx,0,cz);
+  g.userData={
+    name:'Cruise Island Resort',
+    description:'The largest Business World expansion. Luxury beaches, hotels, marina, cruise terminal and a flagship cruise liner. Unlocks at $50,000 revenue.',
+    style:'cruise'
+  };
+
+  const sand=new THREE.MeshStandardMaterial({color:0xe8c77f,roughness:1});
+  const white=new THREE.MeshStandardMaterial({color:0xf3f1e9,roughness:.55});
+  const navy=new THREE.MeshStandardMaterial({color:0x234d76,roughness:.48});
+  const blue=new THREE.MeshStandardMaterial({color:0x3d9ed0,roughness:.42});
+  const teal=new THREE.MeshStandardMaterial({color:0x48b8b0,roughness:.5});
+  const green=new THREE.MeshStandardMaterial({color:0x54a852,roughness:1});
+  const trunkMat=new THREE.MeshStandardMaterial({color:0x8b603f,roughness:1});
+  const glass=new THREE.MeshPhysicalMaterial({color:0x78d8ef,roughness:.14,transparent:true,opacity:.84,transmission:.08,clearcoat:.45});
+  const darkGlass=new THREE.MeshStandardMaterial({color:0x17384f,emissive:0x0c2b3d,emissiveIntensity:.5,roughness:.2});
+  const poolMat=new THREE.MeshPhysicalMaterial({color:0x30bde0,roughness:.15,transparent:true,opacity:.9,clearcoat:.55});
+  const dockMat=new THREE.MeshStandardMaterial({color:0xa88a67,roughness:.8});
+  const red=new THREE.MeshStandardMaterial({color:0xd95745,roughness:.55});
+  const yellow=new THREE.MeshStandardMaterial({color:0xf4c748,roughness:.55});
+  const gray=new THREE.MeshStandardMaterial({color:0x9ba5aa,roughness:.7});
+  const shipDark=new THREE.MeshStandardMaterial({color:0x1f405a,roughness:.42});
+
+  function palm(x,z,s=1){
+    const t=new THREE.Mesh(new THREE.CylinderGeometry(.28*s,.55*s,5.6*s,8),trunkMat);
+    t.position.set(x,2.8*s,z);
+    t.rotation.z=(Math.sin((x+z)*.1))*0.08;
+    g.add(t);
+    for(let i=0;i<6;i++){
+      const leaf=new THREE.Mesh(new THREE.ConeGeometry(1.35*s,4.2*s,5),green);
+      leaf.position.set(x,6.1*s,z);
+      leaf.rotation.z=Math.PI/2;
+      leaf.rotation.y=(Math.PI*2/6)*i;
+      leaf.scale.set(1,.45,1);
+      g.add(leaf);
+    }
+  }
+
+  function umbrella(x,z,colorMat){
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.08,.1,2.2,8),white);
+    pole.position.set(x,1.2,z);
+    g.add(pole);
+    const shade=new THREE.Mesh(new THREE.ConeGeometry(1.7,.8,14),colorMat);
+    shade.position.set(x,2.55,z);
+    shade.rotation.x=Math.PI;
+    g.add(shade);
+  }
+
+  function hotel(x,z,w=24,d=20,h=34,accent=blue){
+    const base=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),white);
+    base.position.set(x,h/2+.6,z);
+    base.castShadow=true;
+    g.add(base);
+
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(w+1.5,1.2,d+1.5),accent);
+    roof.position.set(x,h+1.3,z);
+    g.add(roof);
+
+    for(let yy=6;yy<h-2;yy+=5.2){
+      for(let xx=x-w/2+3;xx<x+w/2-2;xx+=4.2){
+        const win=new THREE.Mesh(new THREE.BoxGeometry(2,1.7,.18),darkGlass);
+        win.position.set(xx,yy,z+d/2+.11);
+        g.add(win);
+      }
+    }
+
+    const awning=new THREE.Mesh(new THREE.BoxGeometry(w*.5,.8,3.0),accent);
+    awning.position.set(x,5,z+d/2+1.3);
+    g.add(awning);
+  }
+
+  // Huge beach promenade along the western/southern shoreline.
+  const beachPromenade=new THREE.Mesh(new THREE.BoxGeometry(300,.35,22),sand);
+  beachPromenade.position.set(-10,.22,150);
+  g.add(beachPromenade);
+
+  // Main cruise terminal with a glass barrel roof.
+  const terminal=new THREE.Mesh(new THREE.BoxGeometry(78,16,34),white);
+  terminal.position.set(0,8.5,108);
+  terminal.castShadow=true;
+  g.add(terminal);
+
+  const terminalGlass=new THREE.Mesh(new THREE.BoxGeometry(62,8,.55),glass);
+  terminalGlass.position.set(0,10,125.2);
+  g.add(terminalGlass);
+
+  for(let x=-30;x<=30;x+=10){
+    const rib=new THREE.Mesh(new THREE.TorusGeometry(11,.42,10,24,Math.PI),navy);
+    rib.rotation.z=Math.PI/2;
+    rib.rotation.y=Math.PI/2;
+    rib.position.set(x,18.2,108);
+    g.add(rib);
+  }
+
+  const terminalSign=spriteLabel('CRUISE TERMINAL','#2b6f93');
+  terminalSign.position.set(0,13.4,126);
+  terminalSign.scale.multiplyScalar(.72);
+  g.add(terminalSign);
+
+  // Resort hotels / towers.
+  hotel(-105,-20,27,22,44,blue);
+  hotel(-62,-30,25,21,36,teal);
+  hotel(70,-25,28,22,48,navy);
+  hotel(112,4,24,20,34,blue);
+
+  // Large central resort pool / plaza.
+  const poolDeck=new THREE.Mesh(new THREE.BoxGeometry(104,.45,67),white);
+  poolDeck.position.set(5,.28,26);
+  g.add(poolDeck);
+  const pool=new THREE.Mesh(new THREE.BoxGeometry(78,.32,43),poolMat);
+  pool.position.set(5,.55,26);
+  g.add(pool);
+
+  const poolIsland=new THREE.Mesh(new THREE.CylinderGeometry(8,8,.6,28),green);
+  poolIsland.position.set(5,.8,26);
+  g.add(poolIsland);
+  palm(5,26,1.15);
+
+  // Large south-west beach club fills the new lower beach lobe.
+  const southBeach=new THREE.Mesh(new THREE.BoxGeometry(138,.42,82),sand);
+  southBeach.position.set(-116,.26,274);
+  g.add(southBeach);
+
+  const beachClubDeck=new THREE.Mesh(new THREE.BoxGeometry(58,.5,42),white);
+  beachClubDeck.position.set(-112,.52,270);
+  g.add(beachClubDeck);
+
+  const beachClubPool=new THREE.Mesh(new THREE.BoxGeometry(42,.32,27),poolMat);
+  beachClubPool.position.set(-112,.82,270);
+  g.add(beachClubPool);
+
+  const beachPavilion=new THREE.Mesh(new THREE.BoxGeometry(34,10,24),white);
+  beachPavilion.position.set(-55,5.3,255);
+  g.add(beachPavilion);
+  const beachPavilionRoof=new THREE.Mesh(new THREE.BoxGeometry(38,1.2,28),teal);
+  beachPavilionRoof.position.set(-55,10.9,255);
+  g.add(beachPavilionRoof);
+
+  for(const [px,pz] of [[-168,245],[-150,282],[-132,315],[-90,316],[-52,302],[-32,270],[-72,232]]){
+    palm(px,pz,1.02);
+  }
+
+  const southUmbColors=[red,yellow,blue,teal];
+  let southUmbrellaIndex=0;
+  for(const [ux,uz] of [[-166,292],[-145,306],[-124,300],[-102,315],[-78,300],[-45,289]]){
+    umbrella(ux,uz,southUmbColors[southUmbrellaIndex%southUmbColors.length]);
+    southUmbrellaIndex++;
+  }
+
+  // Boardwalk / marina docks.
+  for(const dx of [-42,0,42]){
+    const pier=new THREE.Mesh(new THREE.BoxGeometry(10,.8,72),dockMat);
+    pier.position.set(dx,.15,182);
+    g.add(pier);
+    for(const zz of [156,176,198,218]){
+      const postL=new THREE.Mesh(new THREE.CylinderGeometry(.25,.3,15,8),dockMat);
+      postL.position.set(dx-4.2,-7,zz);
+      g.add(postL);
+      const postR=postL.clone();
+      postR.position.x=dx+4.2;
+      g.add(postR);
+    }
+  }
+
+  // Huge flagship cruise liner docked just offshore.
+  const ship=new THREE.Group();
+  ship.position.set(0,0,252);
+
+  const hull=new THREE.Mesh(new THREE.BoxGeometry(142,12,30),shipDark);
+  hull.position.y=-7.2;
+  hull.castShadow=true;
+  ship.add(hull);
+
+  const hullWhite=new THREE.Mesh(new THREE.BoxGeometry(138,12.5,27),white);
+  hullWhite.position.y=.3;
+  ship.add(hullWhite);
+
+  const bow=new THREE.Mesh(new THREE.ConeGeometry(15,24,18),white);
+  bow.rotation.z=-Math.PI/2;
+  bow.position.set(80,.5,0);
+  ship.add(bow);
+
+  for(let deck=0;deck<4;deck++){
+    const deckMesh=new THREE.Mesh(
+      new THREE.BoxGeometry(112-deck*12,5.2,23-deck*2.5),
+      white
+    );
+    deckMesh.position.set(-8,9+deck*4.3,0);
+    ship.add(deckMesh);
+  }
+
+  const windowBand=new THREE.Mesh(new THREE.BoxGeometry(110,2.2,24.2),darkGlass);
+  windowBand.position.set(-8,12.6,0);
+  ship.add(windowBand);
+
+  const funnel=new THREE.Mesh(new THREE.CylinderGeometry(4.5,5.5,12,14),navy);
+  funnel.position.set(-26,30,0);
+  ship.add(funnel);
+  const funnelCap=new THREE.Mesh(new THREE.CylinderGeometry(5.6,5.6,1.6,14),yellow);
+  funnelCap.position.set(-26,36,0);
+  ship.add(funnelCap);
+
+  for(const sx of [-43,-28,-13,2,17,32]){
+    const lifeboat=new THREE.Mesh(new THREE.BoxGeometry(9,2.1,2.3),red);
+    lifeboat.position.set(sx,9.5,14.3);
+    ship.add(lifeboat);
+  }
+
+  const shipSign=spriteLabel('BUSINESS WORLD CRUISES','#204b75');
+  shipSign.position.set(-5,22,15.6);
+  shipSign.scale.multiplyScalar(.58);
+  ship.add(shipSign);
+
+  g.add(ship);
+
+  // Lighthouse on far eastern beach.
+  const lighthouse=new THREE.Mesh(new THREE.CylinderGeometry(3.4,4.2,20,16),white);
+  lighthouse.position.set(155,10,104);
+  g.add(lighthouse);
+  for(const yy of [5,11,17]){
+    const ring=new THREE.Mesh(new THREE.CylinderGeometry(4.35,4.35,2,16),red);
+    ring.position.set(155,yy,104);
+    g.add(ring);
+  }
+  const lightTop=new THREE.Mesh(new THREE.CylinderGeometry(5,4.2,5,16),glass);
+  lightTop.position.set(155,22.5,104);
+  g.add(lightTop);
+  const lightRoof=new THREE.Mesh(new THREE.ConeGeometry(5.6,4,16),red);
+  lightRoof.position.set(155,27,104);
+  g.add(lightRoof);
+
+  // Palm-lined beach and resort perimeter.
+  const palmSpots=[
+    [-155,-120],[-150,-70],[-154,-18],[-150,45],[-140,95],
+    [-105,135],[-60,145],[20,146],[78,140],[132,122],
+    [145,62],[148,18],[145,-40],[130,-92],
+    [-110,68],[-72,72],[72,70],[108,58],
+    [-130,-165],[-78,-185],[-15,-194],[58,-190],[112,-165]
+  ];
+  palmSpots.forEach(([x,z],i)=>palm(x,z,0.9+(i%3)*.08));
+
+  // Beach umbrellas / cabanas.
+  const umbColors=[red,yellow,blue,teal];
+  let ui=0;
+  for(const x of [-140,-110,-80,-50,-20,20,55,90,125]){
+    umbrella(x,148+(ui%2)*8,umbColors[ui%umbColors.length]);
+    ui++;
+  }
+
+  // Small retail / boardwalk pavilions.
+  for(const [x,z,mat] of [[-128,92,red],[-92,95,blue],[88,96,teal],[124,92,yellow]]){
+    const shop=new THREE.Mesh(new THREE.BoxGeometry(20,8,16),white);
+    shop.position.set(x,4.3,z);
+    g.add(shop);
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(22,1.2,18),mat);
+    roof.position.set(x,8.8,z);
+    g.add(roof);
+  }
+
+  // Make the whole resort click/tap readable.
+  scene.add(g);
+  clickable.push(g);
+  return g;
+}
+
+function setCruiseLockedAppearance(group,locked){
+  group.traverse(o=>{
+    if(o.isSprite) return;
+    const materials=Array.isArray(o.material)?o.material:[o.material];
+    materials.filter(Boolean).forEach(m=>{
+      if(!m.color) return;
+      if(m.userData.cruiseOriginalColor===undefined){
+        m.userData.cruiseOriginalColor=m.color.getHex();
+      }
+      if(locked){
+        const original=new THREE.Color(m.userData.cruiseOriginalColor);
+        const gray=(original.r+original.g+original.b)/3;
+        m.color.setRGB(gray*.72,gray*.76,gray*.79);
+      }else{
+        m.color.setHex(m.userData.cruiseOriginalColor);
+      }
+    });
+  });
+}
+
+// WATER-ONLY BOAT DOCK
+// This building type is only valid when its footprint sits on land and at least
+// one side of the footprint directly borders open water.
+const boatTraffic=[];
+
+function isLandAt(x,z){
+  return pointInPolygon(x,z,mainPoints) ||
+    pointInPolygon(x,z,airportPoints) ||
+    pointInPolygon(x,z,transitPoints) ||
+    pointInPolygon(x,z,cruisePoints);
+}
+
+function isWaterAdjacentPlacement(x,z,footprint=2){
+  if(!isLandAt(x,z)) return false;
+  const half=footprint*GRID_TILE/2;
+  const probe=half+GRID_TILE*.45;
+  return [
+    [x+probe,z],
+    [x-probe,z],
+    [x,z+probe],
+    [x,z-probe]
+  ].some(([px,pz])=>!isLandAt(px,pz));
+}
+
+const buildingPlacementRules={
+  boatDock:({x,z,footprint=2})=>isWaterAdjacentPlacement(x,z,footprint)
+};
+
+function createBoatDock(x,z){
+  const footprint=2;
+  if(!buildingPlacementRules.boatDock({x,z,footprint})){
+    console.warn('Boat Dock rejected: it must be placed directly next to water.',x,z);
+    return null;
+  }
+
+  const g=new THREE.Group();
+  g.position.set(x,.2,z);
+  g.userData={
+    name:'Boat Dock',
+    description:'A waterfront marina where residents launch small boats and cruise around Business World. This building can only be placed directly next to water.',
+    style:'boatDock',
+    gridLot:true,
+    footprint,
+    footprintZ:footprint,
+    requiresWater:true,
+    placementRule:'water-adjacent-only'
+  };
+
+  const wood=new THREE.MeshStandardMaterial({color:0x9a7048,roughness:.88});
+  const woodDark=new THREE.MeshStandardMaterial({color:0x60452f,roughness:.92});
+  const white=new THREE.MeshStandardMaterial({color:0xf3efe2,roughness:.58});
+  const teal=new THREE.MeshStandardMaterial({color:0x2c8f91,roughness:.5});
+  const glass=new THREE.MeshPhysicalMaterial({color:0x75d5e4,roughness:.14,transparent:true,opacity:.82,clearcoat:.45});
+  const ropeMat=new THREE.MeshStandardMaterial({color:0xd9c293,roughness:.9});
+  const red=new THREE.MeshStandardMaterial({color:0xd95d4e,roughness:.65});
+
+  // Land-side marina office.
+  const lot=new THREE.Mesh(new THREE.BoxGeometry(25,.55,23),white);
+  lot.position.set(0,.28,0);
+  lot.receiveShadow=true;
+  g.add(lot);
+
+  const office=new THREE.Mesh(new THREE.BoxGeometry(17,10,13),white);
+  office.position.set(0,5.4,1);
+  office.castShadow=true;
+  g.add(office);
+
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(20,1.1,16),teal);
+  roof.position.set(0,10.8,1);
+  roof.castShadow=true;
+  g.add(roof);
+
+  const frontGlass=new THREE.Mesh(new THREE.BoxGeometry(9,5,.35),glass);
+  frontGlass.position.set(0,4.9,-5.65);
+  g.add(frontGlass);
+
+  const sign=spriteLabel('BOAT DOCK','#17666f');
+  sign.position.set(0,13,-2);
+  sign.scale.multiplyScalar(.58);
+  g.add(sign);
+
+  // Main dock extends north from land into the water.
+  const pierLength=42;
+  const pier=new THREE.Mesh(new THREE.BoxGeometry(7,.72,pierLength),wood);
+  pier.position.set(0,-5.8,-27);
+  pier.castShadow=true;
+  pier.receiveShadow=true;
+  g.add(pier);
+
+  // Two side slips.
+  for(const sx of [-1,1]){
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(18,.62,4.2),wood);
+    arm.position.set(sx*7.2,-5.8,-34);
+    g.add(arm);
+  }
+
+  // Pilings reach down toward the ocean floor.
+  for(const pz of [-10,-22,-34,-46]){
+    for(const px of [-2.8,2.8]){
+      const post=new THREE.Mesh(new THREE.CylinderGeometry(.38,.48,13.5,10),woodDark);
+      post.position.set(px,-11.3,pz);
+      g.add(post);
+    }
+  }
+
+  // Rail / rope details near the office.
+  for(const sx of [-3.2,3.2]){
+    const post=new THREE.Mesh(new THREE.CylinderGeometry(.1,.13,3,8),woodDark);
+    post.position.set(sx,-4.2,-10);
+    g.add(post);
+    const rope=new THREE.Mesh(new THREE.TorusGeometry(1.1,.09,6,18,Math.PI),ropeMat);
+    rope.position.set(sx,-3.5,-10);
+    rope.rotation.z=Math.PI/2;
+    g.add(rope);
+  }
+
+  // Lifebuoy on the dock house.
+  const buoy=new THREE.Mesh(new THREE.TorusGeometry(1.15,.32,10,24),red);
+  buoy.position.set(6.5,5.2,-5.9);
+  buoy.rotation.x=Math.PI/2;
+  g.add(buoy);
+
+  scene.add(g);
+  clickable.push(g);
+  return g;
+}
+
+function createLeisureBoat(route,index=0){
+  const g=new THREE.Group();
+
+  const hullMat=new THREE.MeshStandardMaterial({
+    color:[0xf5f1e8,0x4d9ed2,0xe76d55,0xf1bd48][index%4],
+    roughness:.45
+  });
+  const trimMat=new THREE.MeshStandardMaterial({color:0x173d57,roughness:.42});
+  const seatMat=new THREE.MeshStandardMaterial({color:0xe8dcc8,roughness:.7});
+  const skinMat=new THREE.MeshStandardMaterial({color:0xf1c3a0,roughness:.8});
+  const shirtMat=new THREE.MeshStandardMaterial({
+    color:[0x4e8fd0,0xd65f52,0x55a66a,0x8e62c2][index%4],
+    roughness:.65
+  });
+
+  const hull=new THREE.Mesh(new THREE.BoxGeometry(6.6,1.25,2.8),hullMat);
+  hull.position.y=.25;
+  hull.castShadow=true;
+  g.add(hull);
+
+  const bow=new THREE.Mesh(new THREE.ConeGeometry(1.42,3.1,10),hullMat);
+  bow.rotation.z=-Math.PI/2;
+  bow.position.set(4.8,.25,0);
+  bow.castShadow=true;
+  g.add(bow);
+
+  const windshield=new THREE.Mesh(new THREE.BoxGeometry(.22,1.25,2.15),trimMat);
+  windshield.position.set(1.2,1.1,0);
+  windshield.rotation.z=-.18;
+  g.add(windshield);
+
+  const seat=new THREE.Mesh(new THREE.BoxGeometry(1.7,.55,1.8),seatMat);
+  seat.position.set(-1.1,.95,0);
+  g.add(seat);
+
+  // Visible NPC driver.
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(.35,.45,1.4,8),shirtMat);
+  body.position.set(-.15,1.75,0);
+  g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.38,10,8),skinMat);
+  head.position.set(-.15,2.7,0);
+  g.add(head);
+
+  // White wake ribbons trail behind the moving boat.
+  const wakeMat=new THREE.MeshBasicMaterial({color:0xe9fbff,transparent:true,opacity:.42,depthWrite:false});
+  const wakeL=new THREE.Mesh(new THREE.BoxGeometry(6,.035,.22),wakeMat);
+  wakeL.position.set(-5,-.15,-1.05);
+  wakeL.rotation.y=.12;
+  g.add(wakeL);
+  const wakeR=wakeL.clone();
+  wakeR.position.z=1.05;
+  wakeR.rotation.y=-.12;
+  g.add(wakeR);
+
+  g.position.set(route[0][0],-12.15,route[0][1]);
+  scene.add(g);
+
+  boatTraffic.push({
+    obj:g,
+    route,
+    routeIndex:0,
+    speed:9.5+index*1.3,
+    wait:index*.9,
+    baseY:-12.15,
+    phase:index*1.7,
+    wakeL,
+    wakeR
+  });
+  return g;
+}
+
+function updateBoatTraffic(dt,t){
+  boatTraffic.forEach(boat=>{
+    if(boat.wait>0){
+      boat.wait-=dt;
+      boat.obj.position.y=boat.baseY+Math.sin(t*2+boat.phase)*.12;
+      return;
+    }
+
+    const route=boat.route;
+    const target=route[(boat.routeIndex+1)%route.length];
+    const dx=target[0]-boat.obj.position.x;
+    const dz=target[1]-boat.obj.position.z;
+    const dist=Math.hypot(dx,dz);
+
+    if(dist<1.1){
+      boat.routeIndex=(boat.routeIndex+1)%route.length;
+      if(boat.routeIndex===0) boat.wait=2.2+Math.random()*2.6;
+      return;
+    }
+
+    const step=Math.min(dist,boat.speed*dt);
+    boat.obj.position.x+=dx/dist*step;
+    boat.obj.position.z+=dz/dist*step;
+    boat.obj.position.y=boat.baseY+Math.sin(t*2.4+boat.phase)*.16;
+    boat.obj.rotation.y=-Math.atan2(dz,dx);
+    const wakePulse=.34+.16*(.5+.5*Math.sin(t*5+boat.phase));
+    boat.wakeL.material.opacity=wakePulse;
+    boat.wakeR.material.opacity=wakePulse;
+  });
+}
+
+const boatDock=createBoatDock(110,-108);
+
+if(boatDock){
+  const dockRouteA=[
+    [110,-150],[75,-180],[20,-205],[-45,-215],[-100,-195],
+    [-120,-165],[-75,-155],[-10,-170],[60,-165]
+  ];
+  const dockRouteB=[
+    [110,-150],[140,-180],[135,-225],[105,-270],[50,-290],
+    [-10,-280],[-45,-245],[10,-220],[70,-190]
+  ];
+  const dockRouteC=[
+    [110,-150],[90,-185],[45,-230],[15,-265],[-20,-250],
+    [-5,-215],[40,-190],[85,-165]
+  ];
+  createLeisureBoat(dockRouteA,0);
+  createLeisureBoat(dockRouteB,1);
+  createLeisureBoat(dockRouteC,2);
+}
+
+const destinations = [
+  building({name:'Marketing Studio',style:'marketing',footprint:3,x:-105,z:-48,w:25,d:20,h:24,color:0xdb7168,accent:0x813856,description:'Marketing content, social campaigns and brand growth.'}),
+  building({name:'Accounting Hub',style:'accounting',footprint:3,x:-61,z:-48,w:24,d:20,h:28,color:0x609ed5,accent:0x2d5d93,description:'Invoices, bookkeeping, revenue, profit and forecasting.'}),
+  building({name:'BW Headquarters',style:'hq',footprint:4,x:-4,z:-96,w:28,d:24,h:43,color:0x4f91cb,accent:0x2f5878,description:'Central headquarters for Business World operations.'}),
+  createThinkHub(58,-48),
+  building({name:'BW Bank',style:'bank',footprint:3,x:58,z:51,w:27,d:22,h:24,color:0xd7d1c3,accent:0x285e7c,description:'Financial center for bills, business margins, profit tracking, personal goals, business goals and planning strategies.'}),
+  building({name:'Apartments',style:'apartments',footprint:3,x:-104,z:51,w:24,d:21,h:30,color:0xdf9974,accent:0x865a47,description:'Home base for workers and residents.'}),
+  building({name:'Cafe',style:'cafe',footprint:2,x:-61,z:51,w:25,d:21,h:15,color:0xd99661,accent:0x764b39,description:'Social space where agents can idle, meet and recharge.'}),
+  building({name:'Market',style:'market',footprint:2,x:0,z:51,w:25,d:21,h:16,color:0xe5ad65,accent:0x287b5f,description:'Supplies and local commerce.'}),
+  building({name:'School',style:'school',footprint:3,x:108,z:53,w:28,d:22,h:20,color:0xd98262,accent:0xa64f3b,description:'Community learning and worker development.'}),
+  boatDock,
+].filter(Boolean);
+
+const airportBuilding = createAirportTerminal(303,-24);
+airportBuilding.traverse(o=>{ if(o.material && o.material.color) o.material.color.multiplyScalar(.72); });
+
+const airportSurfaceMat=new THREE.MeshStandardMaterial({color:0x4a5258,roughness:.93});
+
+// RIGHT-SIDE AVIATION ZONE
+// Planes and runway activity live on the far east/right side as visual progression.
+// This is decorative airport activity, not a player-controlled system.
+const runway=new THREE.Mesh(new THREE.BoxGeometry(22,.45,230),mats.road);
+runway.position.set(384,.3,-43);
+scene.add(runway);
+
+// Runway centerline.
+for(let z=-145;z<62;z+=18){
+  const stripe=new THREE.Mesh(new THREE.BoxGeometry(1.1,.1,9),mats.white);
+  stripe.position.set(384,.6,z);
+  scene.add(stripe);
+}
+
+// Runway threshold bars.
+for(const z of [-155,72]){
+  for(const xx of [376,380,384,388,392]){
+    const threshold=new THREE.Mesh(new THREE.BoxGeometry(1.3,.08,10),mats.white);
+    threshold.position.set(xx,.62,z);
+    scene.add(threshold);
+  }
+}
+
+// Parallel taxiway stays beside the runway on the right side.
+const taxiway=new THREE.Mesh(new THREE.BoxGeometry(10,.36,205),mats.road);
+taxiway.position.set(352,.28,-43);
+scene.add(taxiway);
+
+// Taxiway-to-runway connectors.
+for(const z of [-120,-65,-10,45]){
+  const connector=new THREE.Mesh(new THREE.BoxGeometry(34,.34,9),mats.road);
+  connector.position.set(368,.28,z);
+  scene.add(connector);
+}
+
+// Apron is concentrated behind/right of the terminal.
+const apron=new THREE.Mesh(new THREE.BoxGeometry(92,.32,82),airportSurfaceMat);
+apron.position.set(314,.27,-74);
+scene.add(apron);
+
+for(const [sx,sz] of [[292,-78],[316,-78],[340,-78],[316,-52]]){
+  const gateMark=new THREE.Mesh(new THREE.BoxGeometry(16,.08,.8),mats.yellow);
+  gateMark.position.set(sx,.47,sz);
+  scene.add(gateMark);
+
+  const noseMark=new THREE.Mesh(new THREE.BoxGeometry(.7,.08,15),mats.yellow);
+  noseMark.position.set(sx,.47,sz-10);
+  scene.add(noseMark);
+}
+
+// Stylized aircraft are decorative only.
+const airportDecorPlanes=[];
+
+function createAirportPlane(x,z,rotation=0){
+  const g=new THREE.Group();
+  g.position.set(x,1.2,z);
+  g.rotation.y=rotation;
+
+  const planeWhite=new THREE.MeshStandardMaterial({color:0xf4f4f0,roughness:.55});
+  const planeBlue=new THREE.MeshStandardMaterial({color:0x347db3,roughness:.45});
+  const planeDark=new THREE.MeshStandardMaterial({color:0x263744,roughness:.45});
+
+  const fuselage=new THREE.Mesh(new THREE.CylinderGeometry(1.7,2.2,21,14),planeWhite);
+  fuselage.rotation.z=Math.PI/2;
+  g.add(fuselage);
+
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(1.75,5.5,14),planeWhite);
+  nose.rotation.z=-Math.PI/2;
+  nose.position.x=12.8;
+  g.add(nose);
+
+  const wing=new THREE.Mesh(new THREE.BoxGeometry(7,.55,18),planeWhite);
+  g.add(wing);
+
+  const tailWing=new THREE.Mesh(new THREE.BoxGeometry(3.3,.4,8),planeWhite);
+  tailWing.position.set(-8.5,1,0);
+  g.add(tailWing);
+
+  const tailFin=new THREE.Mesh(new THREE.BoxGeometry(3.2,5,.55),planeBlue);
+  tailFin.position.set(-9.2,3.2,0);
+  tailFin.rotation.z=-.15;
+  g.add(tailFin);
+
+  for(const ez of [-5.5,5.5]){
+    const engine=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.35,3.4,12),planeDark);
+    engine.rotation.z=Math.PI/2;
+    engine.position.set(1,-1.0,ez);
+    g.add(engine);
+  }
+
+  scene.add(g);
+  return g;
+}
+
+// Parked gate aircraft stay on the right-side apron.
+createAirportPlane(300,-78,0);
+createAirportPlane(330,-78,0);
+
+// One decorative aircraft taxis to the runway, accelerates and takes off.
+// It only starts moving after Airport Island unlocks.
+const takeoffPlane=createAirportPlane(316,-52,-Math.PI/2);
+airportDecorPlanes.push({
+  obj:takeoffPlane,
+  route:[
+    [316,-52,1.2],
+    [352,-52,1.2],
+    [352,-120,1.2],
+    [384,-120,1.2],
+    [384,-155,1.2],
+    [384,50,1.2],
+    [384,92,7],
+    [384,135,21]
+  ],
+  index:0,
+  speed:18,
+  wait:2.5
+});
+
+function updateDecorativeAirportPlanes(dt){
+  airportDecorPlanes.forEach(p=>{
+    if(!airportUnlocked) return;
+    if(p.wait>0){ p.wait-=dt; return; }
+
+    const a=p.route[p.index];
+    const b=p.route[(p.index+1)%p.route.length];
+    const dx=b[0]-p.obj.position.x;
+    const dy=b[2]-p.obj.position.y;
+    const dz=b[1]-p.obj.position.z;
+    const dist=Math.hypot(dx,dy,dz);
+
+    if(dist<0.8){
+      p.index++;
+      if(p.index>=p.route.length-1){
+        p.index=0;
+        p.obj.position.set(p.route[0][0],p.route[0][2],p.route[0][1]);
+        p.wait=5;
+        return;
+      }
+    }else{
+      const step=Math.min(dist,p.speed*dt);
+      p.obj.position.x+=dx/dist*step;
+      p.obj.position.y+=dy/dist*step;
+      p.obj.position.z+=dz/dist*step;
+      p.obj.rotation.y=Math.atan2(dx,dz);
+    }
+  });
+}
+
+// Terminal/service road is kept away from the player build zone.
+road(250,-38,405,-38,10);
+road(405,-38,405,48,10);
+
+// Dedicated open build zone on the LEFT side of Airport Island.
+// This stays clear of planes, taxiways and runway activity.
+const airportBuildZone=new THREE.Group();
+const buildZoneBase=new THREE.Mesh(
+  new THREE.BoxGeometry(82,.24,72),
+  new THREE.MeshStandardMaterial({color:0x8d9394,roughness:.98})
+);
+buildZoneBase.position.set(183,.24,42);
+buildZoneBase.receiveShadow=true;
+airportBuildZone.add(buildZoneBase);
+
+const buildZoneLineMat=new THREE.MeshStandardMaterial({color:0xc7ccca,roughness:.9});
+for(let gx=-30;gx<=30;gx+=15){
+  const line=new THREE.Mesh(new THREE.BoxGeometry(.28,.08,68),buildZoneLineMat);
+  line.position.set(183+gx,.42,42);
+  airportBuildZone.add(line);
+}
+for(let gz=-24;gz<=24;gz+=12){
+  const line=new THREE.Mesh(new THREE.BoxGeometry(78,.08,.28),buildZoneLineMat);
+  line.position.set(183,.42,42+gz);
+  airportBuildZone.add(line);
+}
+const buildZoneLabel=spriteLabel('PLAYER BUILD ZONE','#52636b');
+buildZoneLabel.position.set(183,8.5,42);
+buildZoneLabel.scale.multiplyScalar(.7);
+airportBuildZone.add(buildZoneLabel);
+scene.add(airportBuildZone);
+
+const transitStation=createTransitStation(72,transitZ(-322));
+setTransitStationLockedAppearance(transitStation,true);
+
+const airportRevenueBubble=createRevenueBubble('AIRPORT ISLAND',10000,258,56,-24);
+drawRevenueBubble(airportRevenueBubble,revenue);
+
+const transitRevenueBubble=createRevenueBubble('TRANSIT DISTRICT',25000,72,62,transitZ(-322));
+drawRevenueBubble(transitRevenueBubble,revenue);
+
+const cruiseResort=createCruiseResort(-380,-40);
+setCruiseLockedAppearance(cruiseResort,true);
+
+const cruiseRevenueBubble=createRevenueBubble('CRUISE ISLAND',50000,-405,82,-55);
+drawRevenueBubble(cruiseRevenueBubble,revenue);
+
+// Major expansion landscaping: a formal arrival park and future-development pads.
+const transitDistrictGroup=new THREE.Group();
+const transitParkMat=new THREE.MeshStandardMaterial({color:0x6cab62,roughness:1});
+const transitStoneMat=new THREE.MeshStandardMaterial({color:0xd9d4c9,roughness:.9});
+const transitLockedPadMat=new THREE.MeshStandardMaterial({color:0x858a8d,roughness:.95});
+
+const transitPark=new THREE.Mesh(new THREE.CylinderGeometry(27,28,.6,40),transitParkMat);
+transitPark.position.set(-16,.38,transitZ(-324));
+transitPark.receiveShadow=true;
+transitDistrictGroup.add(transitPark);
+
+const transitParkRing=new THREE.Mesh(new THREE.RingGeometry(29,34,40),transitStoneMat);
+transitParkRing.rotation.x=-Math.PI/2;
+transitParkRing.position.set(-16,.72,transitZ(-324));
+transitDistrictGroup.add(transitParkRing);
+
+for(const [tx,tzBase] of [[-34,-324],[-25,-307],[-7,-307],[2,-324],[-7,-341],[-25,-341]]){
+  const tz=transitZ(tzBase);
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.34,.46,3.2,8),new THREE.MeshStandardMaterial({color:0x75513a,roughness:1}));
+  trunk.position.set(tx,1.7,tz);
+  transitDistrictGroup.add(trunk);
+  const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(2.4,1),new THREE.MeshStandardMaterial({color:0x4b9651,roughness:1}));
+  crown.position.set(tx,5,tz);
+  crown.castShadow=true;
+  transitDistrictGroup.add(crown);
+}
+
+// Grey development pads make it obvious this $25k district has room for future towers and businesses.
+for(const [px,pzBase,sx,sz] of [
+  [-52,-252,48,34],
+  [160,-252,54,34],
+  [-48,-386,52,28],
+  [162,-386,58,28]
+]){
+  const pad=new THREE.Mesh(new THREE.BoxGeometry(sx,.32,sz),transitLockedPadMat);
+  pad.position.set(px,.28,transitZ(pzBase));
+  pad.receiveShadow=true;
+  transitDistrictGroup.add(pad);
+}
+scene.add(transitDistrictGroup);
+transitPark.material.color.setHex(0x777d79);
+
+// DESTINATION PARKING
+// Every building gets a real parking lot. Cars remain visible when parked,
+// leave a lot, drive the road network to another building, then pull into
+// an available parking space instead of disappearing.
+const parkingLots=[];
+const parkingAsphalt=new THREE.MeshStandardMaterial({color:0x343b40,roughness:.96});
+const parkingStripeMat=new THREE.MeshStandardMaterial({color:0xf2f0e8,roughness:.8});
+const parkingCurbMat=new THREE.MeshStandardMaterial({color:0xc9c5bb,roughness:1});
+
+function driveway(ax,az,bx,bz,width=3.4){
+  const dx=bx-ax,dz=bz-az,len=Math.hypot(dx,dz),angle=Math.atan2(dz,dx);
+  const m=new THREE.Mesh(new THREE.BoxGeometry(len,.16,width),parkingAsphalt);
+  m.position.set((ax+bx)/2,.25,(az+bz)/2);
+  m.rotation.y=-angle;
+  m.receiveShadow=true;
+  scene.add(m);
+  return m;
+}
+
+function createParkingLot({name,x,z,entryX,entryZ,spaces=4,airport=false}){
+  const g=new THREE.Group();
+  g.position.set(x,.22,z);
+
+  const width=Math.max(17,spaces*4.4+2.2);
+  const depth=8.2;
+  const base=new THREE.Mesh(new THREE.BoxGeometry(width,.24,depth),parkingAsphalt);
+  base.receiveShadow=true;
+  g.add(base);
+
+  // curb
+  for(const zz of [-depth/2,depth/2]){
+    const curb=new THREE.Mesh(new THREE.BoxGeometry(width+.8,.28,.42),parkingCurbMat);
+    curb.position.set(0,.2,zz);
+    g.add(curb);
+  }
+  for(const xx of [-width/2,width/2]){
+    const curb=new THREE.Mesh(new THREE.BoxGeometry(.42,.28,depth+.8),parkingCurbMat);
+    curb.position.set(xx,.2,0);
+    g.add(curb);
+  }
+
+  const spotPositions=[];
+  const spacing=width/spaces;
+  for(let i=0;i<spaces;i++){
+    const sx=-width/2+spacing*(i+.5);
+    spotPositions.push([x+sx,z]);
+    if(i>0){
+      const line=new THREE.Mesh(new THREE.BoxGeometry(.18,.08,depth-1.0),parkingStripeMat);
+      line.position.set(-width/2+spacing*i,.2,0);
+      g.add(line);
+    }
+  }
+
+  // small P sign
+  const signPole=new THREE.Mesh(new THREE.CylinderGeometry(.11,.14,2.6,8),new THREE.MeshStandardMaterial({color:0x454b50,roughness:.8}));
+  signPole.position.set(-width/2+1.2,1.5,-depth/2+.7);
+  g.add(signPole);
+  const sign=spriteLabel('P','#184f78');
+  sign.scale.multiplyScalar(.23);
+  sign.position.set(-width/2+1.2,3.2,-depth/2+.7);
+  g.add(sign);
+
+  scene.add(g);
+  driveway(x,z,entryX,entryZ,3.2);
+
+  const lot={
+    name,
+    group:g,
+    entry:[entryX,entryZ],
+    spots:spotPositions.map((p,i)=>({position:p,index:i,occupied:false,reserved:false})),
+    airport
+  };
+  parkingLots.push(lot);
+  return lot;
+}
+
+// Parking is deliberately placed on the road-facing side of each building.
+const parkingByName={
+  'Marketing Studio':createParkingLot({name:'Marketing Studio',x:-105,z:-62,entryX:-105,entryZ:-72,spaces:4}),
+  'Accounting Hub':createParkingLot({name:'Accounting Hub',x:-61,z:-62,entryX:-61,entryZ:-72,spaces:4}),
+  'BW Headquarters':createParkingLot({name:'BW Headquarters',x:-4,z:-80,entryX:-4,entryZ:-72,spaces:5}),
+  'Think Hub':createParkingLot({name:'Think Hub',x:58,z:-64,entryX:58,entryZ:-72,spaces:5}),
+  'BW Bank':createParkingLot({name:'BW Bank',x:58,z:34,entryX:58,entryZ:25,spaces:5}),
+  'Apartments':createParkingLot({name:'Apartments',x:-104,z:34,entryX:-104,entryZ:25,spaces:4}),
+  'Cafe':createParkingLot({name:'Cafe',x:-61,z:34,entryX:-61,entryZ:25,spaces:4}),
+  'Market':createParkingLot({name:'Market',x:0,z:34,entryX:0,entryZ:25,spaces:4}),
+  'School':createParkingLot({name:'School',x:108,z:35,entryX:108,entryZ:25,spaces:5}),
+  'Airport':createParkingLot({name:'Airport',x:344,z:55,entryX:405,entryZ:48,spaces:10,airport:true}),
+  'Boat Dock':createParkingLot({name:'Boat Dock',x:110,z:-87,entryX:110,entryZ:-72,spaces:4})
+};
+
+destinations.forEach(b=>{
+  const lot=parkingByName[b.userData.name];
+  if(lot) b.userData.parkingLot=lot;
+});
+airportBuilding.userData.parkingLot=parkingByName['Airport'];
+
+function tree(x,z,scale=1){
+  const g=new THREE.Group(); g.position.set(x,0,z);
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.4,.6,4.2,8),new THREE.MeshStandardMaterial({color:0x7a5132}));
+  trunk.position.y=2.1; g.add(trunk);
+  const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(3.2*scale,1),new THREE.MeshStandardMaterial({color:0x46994e,roughness:1}));
+  crown.position.y=6; crown.castShadow=true; g.add(crown);
+  scene.add(g);
+}
+for(let x=-128;x<=125;x+=19){
+  for(let z=-110;z<=116;z+=20){
+    if(Math.abs(x)<30&&Math.abs(z)<34) continue;
+    if(Math.random()<.3) tree(x+(Math.random()*7-3.5),z+(Math.random()*7-3.5),.8+Math.random()*.35);
+  }
+}
+
+createLotBase(0,0,6,6);
+const plaza=new THREE.Mesh(new THREE.CylinderGeometry(31,33,1,48),new THREE.MeshStandardMaterial({color:0xd8d0bf,roughness:1}));
+plaza.position.y=.5; scene.add(plaza);
+const park=new THREE.Mesh(new THREE.CylinderGeometry(22,23,.45,48),new THREE.MeshStandardMaterial({color:0x79bd62,roughness:1}));
+park.position.y=1.05; scene.add(park);
+
+const boardCanvas=document.createElement('canvas'); boardCanvas.width=1024; boardCanvas.height=520;
+const bctx=boardCanvas.getContext('2d');
+const boardTex=new THREE.CanvasTexture(boardCanvas); boardTex.colorSpace=THREE.SRGBColorSpace;
+function drawBoard(){
+  bctx.fillStyle='#f8fbff'; bctx.fillRect(0,0,1024,520);
+  bctx.strokeStyle='#0f4c72'; bctx.lineWidth=14; bctx.strokeRect(14,14,996,492);
+  bctx.fillStyle='#123c5a'; bctx.font='900 66px system-ui'; bctx.fillText('BUSINESS GROWTH',48,94);
+  bctx.font='800 42px system-ui';
+  bctx.fillText('REVENUE',55,205); bctx.fillText('PROFIT',55,295); bctx.fillText('NEXT ISLAND',55,385);
+  bctx.textAlign='right'; bctx.fillStyle='#0b9c61'; bctx.font='900 58px system-ui';
+  bctx.fillText('$'+Math.floor(revenue).toLocaleString(),955,208);
+  bctx.fillText('$'+Math.floor(profit).toLocaleString(),955,298);
+  bctx.fillStyle=airportUnlocked?'#0b9c61':'#d08a12';
+  bctx.fillText(airportUnlocked?'UNLOCKED':'$10,000',955,388);
+  bctx.textAlign='left'; bctx.fillStyle='#4c6d80'; bctx.font='700 26px system-ui'; bctx.fillText('Business World · live city metrics',55,470);
+  boardTex.needsUpdate=true;
+}
+drawBoard();
+
+const monument=new THREE.Group();
+const pole=new THREE.Mesh(new THREE.CylinderGeometry(1.6,2,22,16),new THREE.MeshStandardMaterial({color:0x858b8f,metalness:.2,roughness:.55}));
+pole.position.y=12; monument.add(pole);
+const frame=new THREE.Mesh(new THREE.BoxGeometry(38,20,1.5),new THREE.MeshStandardMaterial({color:0x14202a,roughness:.55}));
+frame.position.y=30; monument.add(frame);
+const screen=new THREE.Mesh(new THREE.PlaneGeometry(35.8,17.8),new THREE.MeshBasicMaterial({map:boardTex}));
+screen.position.set(0,30,.8); monument.add(screen);
+monument.userData={name:'Business Growth Monument',description:'The center of Business World. Live city revenue and profit are displayed here.'};
+scene.add(monument); clickable.push(monument);
+
+function worker(name,color,x,z){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(.65,.78,2.5,10),new THREE.MeshStandardMaterial({color}));
+  body.position.y=1.55; g.add(body);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.65,12,8),new THREE.MeshStandardMaterial({color:0xf0c4a0}));
+  head.position.y=3.25; g.add(head);
+  const tag=spriteLabel(name,'#111a24'); tag.scale.multiplyScalar(.58); tag.position.y=6; g.add(tag);
+  g.position.set(x,.2,z); scene.add(g);
+  return g;
+}
+
+const agentRoutes = {
+  Reynaldo:[[-98,52],[-86,25],[-36,25],[0,15],[35,25],[86,25],[78,57],[35,76],[0,25]],
+  Moshe:[[-104,50],[-86,25],[-86,-26],[-61,-48],[-36,-26],[0,14]],
+  Victor:[[-95,46],[-86,25],[-86,-26],[-105,-48],[-36,-26],[0,12]]
+};
+[
+  ['Reynaldo',0x2e73d4,-98,52,4.2],
+  ['Moshe',0x8b52bd,-104,50,3.8],
+  ['Victor',0xd17833,-95,46,4.0]
+].forEach(([name,color,x,z,speed],idx)=>{
+  workers.push({name,obj:worker(name,color,x,z),route:agentRoutes[name],t:idx*1.4,speed});
+});
+
+function moveRoute(item,dt){
+  item.t += dt*item.speed/27;
+  const r=item.route, i=Math.floor(item.t)%r.length, j=(i+1)%r.length, f=item.t-Math.floor(item.t);
+  const a=r[i], b=r[j];
+  item.obj.position.x=THREE.MathUtils.lerp(a[0],b[0],f);
+  item.obj.position.z=THREE.MathUtils.lerp(a[1],b[1],f);
+  item.obj.rotation.y=Math.atan2(b[0]-a[0],b[1]-a[1]);
+}
+
+function car(color){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(4.2,1.25,2.2),new THREE.MeshStandardMaterial({color,metalness:.12,roughness:.5}));
+  body.position.y=.8;
+  body.castShadow=true;
+  g.add(body);
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(2.3,.85,1.75),new THREE.MeshStandardMaterial({color:0xb8d9e7,roughness:.3}));
+  roof.position.y=1.65;
+  g.add(roof);
+  scene.add(g);
+  return g;
+}
+
+const mainRoadX=[-86,-36,35,86];
+const mainRoadZ=[-72,-26,25,76];
+
+function nearestRoadNode([x,z]){
+  let best=[mainRoadX[0],mainRoadZ[0]],bestD=Infinity;
+  for(const rx of mainRoadX){
+    for(const rz of mainRoadZ){
+      const d=(rx-x)*(rx-x)+(rz-z)*(rz-z);
+      if(d<bestD){bestD=d;best=[rx,rz]}
+    }
+  }
+  return best;
+}
+
+function mainRoadPath(startEntry,endEntry){
+  const s=nearestRoadNode(startEntry);
+  const e=nearestRoadNode(endEntry);
+  const path=[startEntry,s];
+  if(s[0]!==e[0]) path.push([e[0],s[1]]);
+  if(s[1]!==e[1]) path.push([e[0],e[1]]);
+  path.push(endEntry);
+  return path;
+}
+
+function routeBetweenLots(startLot,endLot,startSpot,endSpot){
+  const start=[startSpot.position[0],startSpot.position[1]];
+  const finish=[endSpot.position[0],endSpot.position[1]];
+  const startAirport=startLot.airport;
+  const endAirport=endLot.airport;
+
+  if(!startAirport && !endAirport){
+    return [start,...mainRoadPath(startLot.entry,endLot.entry),finish];
+  }
+
+  const bridgeMain=[86,-72];
+  const bridgeChain=[[108,-72],[164,-58],[226,-58]];
+
+  if(!startAirport && endAirport){
+    const path=[start,...mainRoadPath(startLot.entry,bridgeMain),...bridgeChain,endLot.entry,finish];
+    return path;
+  }
+
+  if(startAirport && !endAirport){
+    const reverseBridge=[...bridgeChain].reverse();
+    return [start,startLot.entry,...reverseBridge,bridgeMain,...mainRoadPath(bridgeMain,endLot.entry),finish];
+  }
+
+  return [start,startLot.entry,endLot.entry,finish];
+}
+
+function freeSpot(lot){
+  return lot.spots.find(s=>!s.occupied&&!s.reserved) || null;
+}
+
+function availableDestination(currentLot){
+  const options=parkingLots.filter(lot=>{
+    if(lot===currentLot) return false;
+    if(lot.airport && !airportUnlocked) return false;
+    return !!freeSpot(lot);
+  });
+  if(!options.length) return null;
+  return options[Math.floor(Math.random()*options.length)];
+}
+
+function beginTrip(vehicle){
+  const destination=availableDestination(vehicle.currentLot);
+  if(!destination){
+    vehicle.wait=2;
+    return;
+  }
+  const targetSpot=freeSpot(destination);
+  if(!targetSpot){
+    vehicle.wait=2;
+    return;
+  }
+
+  // Reserve destination before leaving so two cars never choose the same space.
+  targetSpot.reserved=true;
+  vehicle.currentSpot.occupied=false;
+  vehicle.destination=destination;
+  vehicle.targetSpot=targetSpot;
+  vehicle.path=routeBetweenLots(vehicle.currentLot,destination,vehicle.currentSpot,targetSpot);
+  vehicle.pathIndex=0;
+  vehicle.state='driving';
+}
+
+function updateDestinationCar(vehicle,dt){
+  if(vehicle.state==='parked'){
+    vehicle.wait-=dt;
+    if(vehicle.wait<=0) beginTrip(vehicle);
+    return;
+  }
+
+  if(vehicle.state!=='driving' || vehicle.path.length<2) return;
+
+  let remaining=vehicle.speed*dt;
+  while(remaining>0 && vehicle.pathIndex<vehicle.path.length-1){
+    const a=vehicle.path[vehicle.pathIndex];
+    const b=vehicle.path[vehicle.pathIndex+1];
+    const px=vehicle.obj.position.x,pz=vehicle.obj.position.z;
+    const dx=b[0]-px,dz=b[1]-pz;
+    const dist=Math.hypot(dx,dz);
+
+    if(dist<=remaining+.001){
+      vehicle.obj.position.set(b[0],.35,b[1]);
+      vehicle.pathIndex++;
+      remaining-=dist;
+    }else{
+      const ux=dx/dist,uz=dz/dist;
+      vehicle.obj.position.x+=ux*remaining;
+      vehicle.obj.position.z+=uz*remaining;
+      vehicle.obj.rotation.y=Math.atan2(ux,uz);
+      remaining=0;
+    }
+  }
+
+  if(vehicle.pathIndex>=vehicle.path.length-1){
+    vehicle.obj.position.set(vehicle.targetSpot.position[0],.35,vehicle.targetSpot.position[1]);
+    vehicle.currentLot=vehicle.destination;
+    vehicle.currentSpot=vehicle.targetSpot;
+    vehicle.currentSpot.reserved=false;
+    vehicle.currentSpot.occupied=true;
+    vehicle.destination=null;
+    vehicle.targetSpot=null;
+    vehicle.path=[];
+    vehicle.state='parked';
+    vehicle.wait=3+Math.random()*7;
+  }
+}
+
+const startingLots=parkingLots.filter(l=>!l.airport);
+const carColors=[0xe45a45,0x3486d9,0xe0b638,0xf4f4f4,0x555b67,0x47a36f,0x9458a9,0xe67b35];
+
+for(let i=0;i<Math.min(12,startingLots.length*2);i++){
+  const lot=startingLots[i%startingLots.length];
+  const spot=freeSpot(lot);
+  if(!spot) continue;
+  spot.occupied=true;
+  const obj=car(carColors[i%carColors.length]);
+  obj.position.set(spot.position[0],.35,spot.position[1]);
+  obj.rotation.y=Math.PI/2;
+  cars.push({
+    obj,
+    currentLot:lot,
+    currentSpot:spot,
+    destination:null,
+    targetSpot:null,
+    path:[],
+    pathIndex:0,
+    state:'parked',
+    wait:1.5+Math.random()*8,
+    speed:13+Math.random()*3
+  });
+}
+
+function unlockAirport(){
+  if(airportUnlocked) return;
+  airportUnlocked=true;
+  airportIsland.setTopMaterial(mats.grass2);
+  airportRevenueBubble.sprite.visible=false;
+  bridge.visible=true;
+  bridge.scale.x=.02;
+  islandStatus.textContent='Next expansion: Train District · $25,000 revenue';
+  islandStatus.classList.remove('unlocked');
+  airportBuilding.userData.description='Airport expansion unlocked. This island can now support logistics, travel and future buildings.';
+  airportBuilding.traverse(o=>{
+    if(o.material && o.material.color && o!==airportBuilding){
+      o.material.color.offsetHSL(0,0,.14);
+    }
+  });
+}
+
+
+function unlockTransitDistrict(){
+  if(transitUnlocked) return;
+  transitUnlocked=true;
+  transitIsland.setTopMaterial(mats.grass2);
+  transitRevenueBubble.sprite.visible=false;
+  setTransitStationLockedAppearance(transitStation,false);
+  transitPark.material.color.setHex(0x6cab62);
+  transitLockedPadMat.color.setHex(0x98c879);
+  transitStation.userData.description='Underground Central Station is open. Trains now enter and exit through the underground tunnels automatically.';
+  transitStation.userData.train.visible=true;
+  unlockTransitBridges();
+  islandStatus.textContent='Next expansion: Cruise Island · $50,000 revenue';
+  islandStatus.classList.remove('unlocked');
+}
+
+function unlockCruiseIsland(){
+  if(cruiseUnlocked) return;
+  cruiseUnlocked=true;
+  cruiseIsland.setTopMaterial(mats.sand);
+  cruiseRevenueBubble.sprite.visible=false;
+  setCruiseLockedAppearance(cruiseResort,false);
+  cruiseAccessBridge.visible=true;
+  cruiseAccessBridge.scale.x=.02;
+  cruiseResort.userData.description='Cruise Island Resort is open: beaches, hotels, marina, cruise terminal and the Business World flagship cruise liner.';
+  islandStatus.textContent='Cruise Island unlocked ✓';
+  islandStatus.classList.add('unlocked');
+}
+
+let revenueBubbleTimer=0;
+function updateMetrics(dt){
+  revenue += dt*19;
+  profit += dt*7.2;
+  revenueBubbleTimer+=dt;
+  if(revenueBubbleTimer>=.2){
+    revenueBubbleTimer=0;
+    if(!airportUnlocked) drawRevenueBubble(airportRevenueBubble,revenue);
+    if(!transitUnlocked) drawRevenueBubble(transitRevenueBubble,revenue);
+    if(!cruiseUnlocked) drawRevenueBubble(cruiseRevenueBubble,revenue);
+  }
+  const growth=((revenue-startRevenue)/startRevenue)*100;
+  revenueEl.textContent='$'+Math.floor(revenue).toLocaleString();
+  profitEl.textContent='$'+Math.floor(profit).toLocaleString();
+  growthEl.textContent='+'+growth.toFixed(1)+'%';
+  if(revenue>=10000) unlockAirport();
+  if(revenue>=25000) unlockTransitDistrict();
+  if(revenue>=50000) unlockCruiseIsland();
+  if(airportUnlocked && bridge.scale.x<1) bridge.scale.x=Math.min(1,bridge.scale.x+dt*.75);
+  if(cruiseUnlocked && cruiseAccessBridge.scale.x<1) cruiseAccessBridge.scale.x=Math.min(1,cruiseAccessBridge.scale.x+dt*.75);
+}
+
+function updateLighting(t){
+  let phase=timeMode;
+  if(phase==='AUTO'){
+    const c=(t*.015)%4;
+    phase=c<1.5?'DAY':c<2.3?'DUSK':c<3.2?'NIGHT':'DUSK';
+  }
+  if(phase==='DAY'){scene.background.setHex(0x92d9ef);hemi.intensity=2.25;sun.intensity=3.1;renderer.toneMappingExposure=1.05}
+  else if(phase==='DUSK'){scene.background.setHex(0x829eb9);hemi.intensity=1.35;sun.intensity=1.7;renderer.toneMappingExposure=.88}
+  else {scene.background.setHex(0x1b2e4a);hemi.intensity=.55;sun.intensity=.65;renderer.toneMappingExposure=.68}
+}
+
+const rainCount=550;
+const rainArr=new Float32Array(rainCount*3);
+for(let i=0;i<rainCount;i++){rainArr[i*3]=(Math.random()-.5)*360;rainArr[i*3+1]=Math.random()*100+10;rainArr[i*3+2]=(Math.random()-.5)*320}
+const rainGeo=new THREE.BufferGeometry(); rainGeo.setAttribute('position',new THREE.BufferAttribute(rainArr,3));
+const rainMat=new THREE.PointsMaterial({color:0xccefff,size:.55,transparent:true,opacity:0});
+const rain=new THREE.Points(rainGeo,rainMat); scene.add(rain);
+function updateWeather(dt){
+  rainMat.opacity=weatherMode==='RAIN'?.65:0;
+  if(weatherMode==='RAIN'){
+    const p=rainGeo.attributes.position.array;
+    for(let i=0;i<rainCount;i++){p[i*3+1]-=dt*38;if(p[i*3+1]<-5)p[i*3+1]=110}
+    rainGeo.attributes.position.needsUpdate=true;
+  }
+}
+
+const raycaster=new THREE.Raycaster();
+const pointer=new THREE.Vector2();
+let pointerDown={x:0,y:0};
+renderer.domElement.addEventListener('pointerdown',e=>pointerDown={x:e.clientX,y:e.clientY});
+renderer.domElement.addEventListener('pointerup',e=>{
+  if(Math.hypot(e.clientX-pointerDown.x,e.clientY-pointerDown.y)>8) return;
+  const r=renderer.domElement.getBoundingClientRect();
+  pointer.x=((e.clientX-r.left)/r.width)*2-1;
+  pointer.y=-((e.clientY-r.top)/r.height)*2+1;
+  raycaster.setFromCamera(pointer,camera);
+  const hit=raycaster.intersectObjects(clickable,true)[0];
+  if(!hit) return;
+  let obj=hit.object;
+  while(obj.parent && !obj.userData?.name) obj=obj.parent;
+  if(obj.userData?.name){
+    if(obj.userData.financeCenter){ openBankPanel(); return; }
+    infoTitle.textContent=obj.userData.name;
+    infoText.textContent=obj.userData.description || 'Business World location.';
+    infoCard.classList.add('show');
+  }
+});
+document.getElementById('closeInfo').onclick=()=>infoCard.classList.remove('show');
+
+function cameraTween(position,target){
+  const a=camera.position.clone(), b=controls.target.clone(), start=performance.now(), duration=650;
+  function frame(now){
+    const k=Math.min(1,(now-start)/duration), e=1-Math.pow(1-k,3);
+    camera.position.lerpVectors(a,position,e);
+    controls.target.lerpVectors(b,target,e);
+    if(k<1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+document.getElementById('homeBtn').onclick=()=>cameraTween(new THREE.Vector3(170,145,205),new THREE.Vector3(0,5,0));
+document.getElementById('rotateLeftBtn').onclick=()=>{
+  const v=camera.position.clone().sub(controls.target).applyAxisAngle(new THREE.Vector3(0,1,0),Math.PI/6);
+  camera.position.copy(controls.target).add(v);
+};
+document.getElementById('rotateRightBtn').onclick=()=>{
+  const v=camera.position.clone().sub(controls.target).applyAxisAngle(new THREE.Vector3(0,1,0),-Math.PI/6);
+  camera.position.copy(controls.target).add(v);
+};
+document.getElementById('weatherBtn').onclick=e=>{
+  weatherMode=weatherMode==='CLEAR'?'RAIN':'CLEAR';
+  e.currentTarget.textContent=weatherMode==='CLEAR'?'☀ Clear':'☂ Rain';
+};
+document.getElementById('timeBtn').onclick=e=>{
+  const modes=['AUTO','DAY','DUSK','NIGHT'];
+  timeMode=modes[(modes.indexOf(timeMode)+1)%modes.length];
+  e.currentTarget.textContent='◐ '+(timeMode[0]+timeMode.slice(1).toLowerCase());
+};
+
+const clock=new THREE.Clock();
+let boardTick=0;
+function animate(){
+  const dt=Math.min(.035,clock.getDelta());
+  const t=clock.elapsedTime;
+  controls.update();
+  // Keep free panning usable without letting the camera get permanently lost.
+  controls.target.x = THREE.MathUtils.clamp(controls.target.x,-710,430);
+  controls.target.z = THREE.MathUtils.clamp(controls.target.z,-680,260);
+  controls.target.y = THREE.MathUtils.clamp(controls.target.y,0,45);
+  workers.forEach(w=>moveRoute(w,dt));
+  cars.forEach(c=>updateDestinationCar(c,dt));
+  updateBoatTraffic(dt,t);
+  updateDecorativeAirportPlanes(dt);
+  updateTransitTrain(dt);
+  updateTransitBridgeBuild(dt);
+  updateProgressionBridges(dt);
+  updateMetrics(dt);
+  updateLighting(t);
+  updateWeather(dt);
+  updateOcean(t);
+  updateRevenueBubbleMotion(t);
+  boardTick+=dt;
+  if(boardTick>.8){boardTick=0;drawBoard()}
+  renderer.render(scene,camera);
+  requestAnimationFrame(animate);
+}
+
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight,false);
+});
+
+loading.style.display='none';
+animate();,'#8e6b1f');
+    dollar.position.set(0,h+7.2,.7); dollar.scale.set(4.8,4.8,1); g.add(dollar);
+    for(const sx of [-1,1]){
+      const lamp=new THREE.PointLight(0xffd36b,1.8,24,2);
+      lamp.position.set(sx*7,8,d/2+5); g.add(lamp);
     }
   } else if(style==='school'){
     const wingL=new THREE.Mesh(new THREE.BoxGeometry(w*.35,h*.58,d*.8),bodyMat);
