@@ -255,7 +255,8 @@ const mats = {
   sidewalk:new THREE.MeshStandardMaterial({color:0xd5d1c6, roughness:.95}),
   yellow:new THREE.MeshStandardMaterial({color:0xf1ca4d, roughness:.75}),
   white:new THREE.MeshStandardMaterial({color:0xf7f6ef, roughness:.8}),
-  locked:new THREE.MeshStandardMaterial({color:0x80858a, roughness:1})
+  locked:new THREE.MeshStandardMaterial({color:0x80858a, roughness:1}),
+  sand:new THREE.MeshStandardMaterial({color:0xe8c77f, roughness:1})
 };
 
 const clickable = [];
@@ -266,6 +267,7 @@ let profit = 2650;
 let startRevenue = revenue;
 let airportUnlocked = false;
 let transitUnlocked = false;
+let cruiseUnlocked = false;
 let timeMode = 'AUTO';
 let weatherMode = 'CLEAR';
 const GRID_TILE = 13;
@@ -376,15 +378,23 @@ const transitPoints = [
   [-120,-420],[-52,-452],[45,-466],[145,-454],[226,-420],[268,-368],[277,-308],
   [258,-250],[214,-211],[136,-190],[45,-192],[-45,-214],[-108,-254],[-137,-310],[-136,-365]
 ];
+const cruisePoints = [
+  [-560,-170],[-530,-225],[-470,-260],[-390,-276],[-305,-270],[-235,-235],[-200,-185],
+  [-190,-125],[-195,-65],[-185,-5],[-190,65],[-225,125],[-290,165],[-380,180],
+  [-470,165],[-535,120],[-570,55],[-578,-35],[-572,-105]
+];
 
 createShoreFoam(mainPoints,1.055);
 createShoreFoam(mainPoints,1.09);
 createShoreFoam(airportPoints,1.06);
 createShoreFoam(transitPoints,1.06);
+createShoreFoam(cruisePoints,1.035);
+createShoreFoam(cruisePoints,1.07);
 
 island(mainPoints, mats.grass, 17);
 const airportIsland = island(airportPoints, mats.locked, 18);
 const transitIsland = island(transitPoints, mats.locked, 18);
+const cruiseIsland = island(cruisePoints, mats.locked, 19);
 // No separate line-grid overlay: each complete land block is one visible tile.
 
 function road(ax,az,bx,bz,width=10,bridge=false){
@@ -451,6 +461,20 @@ road(190,-120,205,-120,11);
 road(205,-120,205,-158,11);
 road(205,-224,205,-208,11);
 
+// $50k Cruise Island — the largest expansion on the map.
+road(-530,-145,-225,-145,12);
+road(-540,-65,-210,-65,11);
+road(-535,20,-210,20,11);
+road(-510,100,-245,100,11);
+road(-500,-210,-500,125,11);
+road(-400,-245,-400,145,12);
+road(-300,-235,-300,145,11);
+road(-225,-180,-225,110,11);
+
+// This bridge appears when the $50k resort unlocks.
+const cruiseAccessBridge=road(-190,25,-150,25,12,true);
+cruiseAccessBridge.visible=false;
+
 function spriteLabel(text,bg='#143e62'){
   const c=document.createElement('canvas'); c.width=512; c.height=160;
   const x=c.getContext('2d');
@@ -480,8 +504,8 @@ function createRevenueBubble(title,target,x,y,z){
   });
 
   const sprite=new THREE.Sprite(material);
-  const baseScaleX=title==='AIRPORT ISLAND'?68:62;
-  const baseScaleY=title==='AIRPORT ISLAND'?25:23;
+  const baseScaleX=title==='CRUISE ISLAND'?76:(title==='AIRPORT ISLAND'?68:62);
+  const baseScaleY=title==='CRUISE ISLAND'?28:(title==='AIRPORT ISLAND'?25:23);
   sprite.position.set(x,y,z);
   sprite.scale.set(baseScaleX,baseScaleY,1);
   sprite.renderOrder=1000;
@@ -552,6 +576,45 @@ function drawTrainIcon(ctx,cx,cy){
   ctx.restore();
 }
 
+function drawCruiseIcon(ctx,cx,cy){
+  ctx.save();
+  ctx.translate(cx,cy);
+  ctx.fillStyle='#ffffff';
+  ctx.strokeStyle='#176f9f';
+  ctx.lineWidth=7;
+  ctx.lineJoin='round';
+
+  ctx.beginPath();
+  ctx.moveTo(-45,8);
+  ctx.lineTo(42,8);
+  ctx.lineTo(28,34);
+  ctx.lineTo(-30,34);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.roundRect(-26,-22,51,30,8);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle='#7dd7ef';
+  ctx.fillRect(-17,-14,10,8);
+  ctx.fillRect(-2,-14,10,8);
+  ctx.fillRect(13,-14,10,8);
+
+  ctx.fillStyle='#ffb62f';
+  ctx.fillRect(-8,-36,14,14);
+
+  ctx.strokeStyle='#176f9f';
+  ctx.lineWidth=5;
+  ctx.beginPath();
+  ctx.moveTo(-42,42); ctx.quadraticCurveTo(-22,33,-2,42);
+  ctx.quadraticCurveTo(18,51,42,40);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawRevenueBubble(bubble,currentRevenue){
   if(!bubble || !bubble.sprite.visible) return;
 
@@ -562,6 +625,7 @@ function drawRevenueBubble(bubble,currentRevenue){
   const ctx=bubble.ctx;
   const progress=THREE.MathUtils.clamp(currentRevenue/bubble.target,0,1);
   const isAirport=bubble.title==='AIRPORT ISLAND';
+  const isCruise=bubble.title==='CRUISE ISLAND';
 
   ctx.clearRect(0,0,900,330);
 
@@ -589,6 +653,9 @@ function drawRevenueBubble(bubble,currentRevenue){
   if(isAirport){
     badgeGrad.addColorStop(0,'#ffd95c');
     badgeGrad.addColorStop(1,'#ffad22');
+  }else if(isCruise){
+    badgeGrad.addColorStop(0,'#61dfc6');
+    badgeGrad.addColorStop(1,'#23a4cf');
   }else{
     badgeGrad.addColorStop(0,'#bba8ff');
     badgeGrad.addColorStop(1,'#7f63e7');
@@ -598,6 +665,7 @@ function drawRevenueBubble(bubble,currentRevenue){
   ctx.strokeStyle='#ffffff'; ctx.lineWidth=6; ctx.stroke();
 
   if(isAirport) drawAirportIcon(ctx,iconX,iconY);
+  else if(isCruise) drawCruiseIcon(ctx,iconX,iconY);
   else drawTrainIcon(ctx,iconX,iconY);
 
   // Friendly two-tone title with dark outline.
@@ -616,6 +684,14 @@ function drawRevenueBubble(bubble,currentRevenue){
     const w=ctx.measureText('AIRPORT').width;
     ctx.strokeText('ISLAND',190+w+12,titleY);
     ctx.fillStyle='#ffb52c';
+    ctx.fillText('ISLAND',190+w+12,titleY);
+  }else if(isCruise){
+    ctx.strokeText('CRUISE',190,titleY);
+    ctx.fillStyle='#35cdb1';
+    ctx.fillText('CRUISE',190,titleY);
+    const w=ctx.measureText('CRUISE').width;
+    ctx.strokeText('ISLAND',190+w+12,titleY);
+    ctx.fillStyle='#ff9f45';
     ctx.fillText('ISLAND',190+w+12,titleY);
   }else{
     ctx.strokeText('TRANSIT',190,titleY);
@@ -709,7 +785,7 @@ function drawRevenueBubble(bubble,currentRevenue){
     ctx.restore();
   };
   sparkle(850,76,15,'#ffd23d');
-  sparkle(52,94,12,isAirport?'#4fc9ff':'#9e86ff');
+  sparkle(52,94,12,isAirport?'#4fc9ff':(isCruise?'#43d9b8':'#9e86ff'));
   sparkle(834,150,9,'#ffb32c');
 
   ctx.strokeStyle='#ffbf2f';
@@ -723,7 +799,7 @@ function drawRevenueBubble(bubble,currentRevenue){
 }
 
 function updateRevenueBubbleMotion(t){
-  const bubbles=[airportRevenueBubble,transitRevenueBubble];
+  const bubbles=[airportRevenueBubble,transitRevenueBubble,cruiseRevenueBubble];
   bubbles.forEach((bubble,index)=>{
     if(!bubble || !bubble.sprite.visible) return;
 
@@ -1676,6 +1752,263 @@ function updateTransitTrain(dt){
   train.rotation.y=0;
 }
 
+
+function createCruiseResort(cx,cz){
+  const g=new THREE.Group();
+  g.position.set(cx,0,cz);
+  g.userData={
+    name:'Cruise Island Resort',
+    description:'The largest Business World expansion. Luxury beaches, hotels, marina, cruise terminal and a flagship cruise liner. Unlocks at $50,000 revenue.',
+    style:'cruise'
+  };
+
+  const sand=new THREE.MeshStandardMaterial({color:0xe8c77f,roughness:1});
+  const white=new THREE.MeshStandardMaterial({color:0xf3f1e9,roughness:.55});
+  const navy=new THREE.MeshStandardMaterial({color:0x234d76,roughness:.48});
+  const blue=new THREE.MeshStandardMaterial({color:0x3d9ed0,roughness:.42});
+  const teal=new THREE.MeshStandardMaterial({color:0x48b8b0,roughness:.5});
+  const green=new THREE.MeshStandardMaterial({color:0x54a852,roughness:1});
+  const trunkMat=new THREE.MeshStandardMaterial({color:0x8b603f,roughness:1});
+  const glass=new THREE.MeshPhysicalMaterial({color:0x78d8ef,roughness:.14,transparent:true,opacity:.84,transmission:.08,clearcoat:.45});
+  const darkGlass=new THREE.MeshStandardMaterial({color:0x17384f,emissive:0x0c2b3d,emissiveIntensity:.5,roughness:.2});
+  const poolMat=new THREE.MeshPhysicalMaterial({color:0x30bde0,roughness:.15,transparent:true,opacity:.9,clearcoat:.55});
+  const dockMat=new THREE.MeshStandardMaterial({color:0xa88a67,roughness:.8});
+  const red=new THREE.MeshStandardMaterial({color:0xd95745,roughness:.55});
+  const yellow=new THREE.MeshStandardMaterial({color:0xf4c748,roughness:.55});
+  const gray=new THREE.MeshStandardMaterial({color:0x9ba5aa,roughness:.7});
+  const shipDark=new THREE.MeshStandardMaterial({color:0x1f405a,roughness:.42});
+
+  function palm(x,z,s=1){
+    const t=new THREE.Mesh(new THREE.CylinderGeometry(.28*s,.55*s,5.6*s,8),trunkMat);
+    t.position.set(x,2.8*s,z);
+    t.rotation.z=(Math.sin((x+z)*.1))*0.08;
+    g.add(t);
+    for(let i=0;i<6;i++){
+      const leaf=new THREE.Mesh(new THREE.ConeGeometry(1.35*s,4.2*s,5),green);
+      leaf.position.set(x,6.1*s,z);
+      leaf.rotation.z=Math.PI/2;
+      leaf.rotation.y=(Math.PI*2/6)*i;
+      leaf.scale.set(1,.45,1);
+      g.add(leaf);
+    }
+  }
+
+  function umbrella(x,z,colorMat){
+    const pole=new THREE.Mesh(new THREE.CylinderGeometry(.08,.1,2.2,8),white);
+    pole.position.set(x,1.2,z);
+    g.add(pole);
+    const shade=new THREE.Mesh(new THREE.ConeGeometry(1.7,.8,14),colorMat);
+    shade.position.set(x,2.55,z);
+    shade.rotation.x=Math.PI;
+    g.add(shade);
+  }
+
+  function hotel(x,z,w=24,d=20,h=34,accent=blue){
+    const base=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),white);
+    base.position.set(x,h/2+.6,z);
+    base.castShadow=true;
+    g.add(base);
+
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(w+1.5,1.2,d+1.5),accent);
+    roof.position.set(x,h+1.3,z);
+    g.add(roof);
+
+    for(let yy=6;yy<h-2;yy+=5.2){
+      for(let xx=x-w/2+3;xx<x+w/2-2;xx+=4.2){
+        const win=new THREE.Mesh(new THREE.BoxGeometry(2,1.7,.18),darkGlass);
+        win.position.set(xx,yy,z+d/2+.11);
+        g.add(win);
+      }
+    }
+
+    const awning=new THREE.Mesh(new THREE.BoxGeometry(w*.5,.8,3.0),accent);
+    awning.position.set(x,5,z+d/2+1.3);
+    g.add(awning);
+  }
+
+  // Huge beach promenade along the western/southern shoreline.
+  const beachPromenade=new THREE.Mesh(new THREE.BoxGeometry(300,.35,22),sand);
+  beachPromenade.position.set(-10,.22,150);
+  g.add(beachPromenade);
+
+  // Main cruise terminal with a glass barrel roof.
+  const terminal=new THREE.Mesh(new THREE.BoxGeometry(78,16,34),white);
+  terminal.position.set(0,8.5,108);
+  terminal.castShadow=true;
+  g.add(terminal);
+
+  const terminalGlass=new THREE.Mesh(new THREE.BoxGeometry(62,8,.55),glass);
+  terminalGlass.position.set(0,10,125.2);
+  g.add(terminalGlass);
+
+  for(let x=-30;x<=30;x+=10){
+    const rib=new THREE.Mesh(new THREE.TorusGeometry(11,.42,10,24,Math.PI),navy);
+    rib.rotation.z=Math.PI/2;
+    rib.rotation.y=Math.PI/2;
+    rib.position.set(x,18.2,108);
+    g.add(rib);
+  }
+
+  const terminalSign=spriteLabel('CRUISE TERMINAL','#2b6f93');
+  terminalSign.position.set(0,13.4,126);
+  terminalSign.scale.multiplyScalar(.72);
+  g.add(terminalSign);
+
+  // Resort hotels / towers.
+  hotel(-105,-20,27,22,44,blue);
+  hotel(-62,-30,25,21,36,teal);
+  hotel(70,-25,28,22,48,navy);
+  hotel(112,4,24,20,34,blue);
+
+  // Large central resort pool / plaza.
+  const poolDeck=new THREE.Mesh(new THREE.BoxGeometry(104,.45,67),white);
+  poolDeck.position.set(5,.28,26);
+  g.add(poolDeck);
+  const pool=new THREE.Mesh(new THREE.BoxGeometry(78,.32,43),poolMat);
+  pool.position.set(5,.55,26);
+  g.add(pool);
+
+  const poolIsland=new THREE.Mesh(new THREE.CylinderGeometry(8,8,.6,28),green);
+  poolIsland.position.set(5,.8,26);
+  g.add(poolIsland);
+  palm(5,26,1.15);
+
+  // Boardwalk / marina docks.
+  for(const dx of [-42,0,42]){
+    const pier=new THREE.Mesh(new THREE.BoxGeometry(10,.8,72),dockMat);
+    pier.position.set(dx,.15,182);
+    g.add(pier);
+    for(const zz of [156,176,198,218]){
+      const postL=new THREE.Mesh(new THREE.CylinderGeometry(.25,.3,15,8),dockMat);
+      postL.position.set(dx-4.2,-7,zz);
+      g.add(postL);
+      const postR=postL.clone();
+      postR.position.x=dx+4.2;
+      g.add(postR);
+    }
+  }
+
+  // Huge flagship cruise liner docked just offshore.
+  const ship=new THREE.Group();
+  ship.position.set(0,0,252);
+
+  const hull=new THREE.Mesh(new THREE.BoxGeometry(142,12,30),shipDark);
+  hull.position.y=-7.2;
+  hull.castShadow=true;
+  ship.add(hull);
+
+  const hullWhite=new THREE.Mesh(new THREE.BoxGeometry(138,12.5,27),white);
+  hullWhite.position.y=.3;
+  ship.add(hullWhite);
+
+  const bow=new THREE.Mesh(new THREE.ConeGeometry(15,24,18),white);
+  bow.rotation.z=-Math.PI/2;
+  bow.position.set(80,.5,0);
+  ship.add(bow);
+
+  for(let deck=0;deck<4;deck++){
+    const deckMesh=new THREE.Mesh(
+      new THREE.BoxGeometry(112-deck*12,5.2,23-deck*2.5),
+      white
+    );
+    deckMesh.position.set(-8,9+deck*4.3,0);
+    ship.add(deckMesh);
+  }
+
+  const windowBand=new THREE.Mesh(new THREE.BoxGeometry(110,2.2,24.2),darkGlass);
+  windowBand.position.set(-8,12.6,0);
+  ship.add(windowBand);
+
+  const funnel=new THREE.Mesh(new THREE.CylinderGeometry(4.5,5.5,12,14),navy);
+  funnel.position.set(-26,30,0);
+  ship.add(funnel);
+  const funnelCap=new THREE.Mesh(new THREE.CylinderGeometry(5.6,5.6,1.6,14),yellow);
+  funnelCap.position.set(-26,36,0);
+  ship.add(funnelCap);
+
+  for(const sx of [-43,-28,-13,2,17,32]){
+    const lifeboat=new THREE.Mesh(new THREE.BoxGeometry(9,2.1,2.3),red);
+    lifeboat.position.set(sx,9.5,14.3);
+    ship.add(lifeboat);
+  }
+
+  const shipSign=spriteLabel('BUSINESS WORLD CRUISES','#204b75');
+  shipSign.position.set(-5,22,15.6);
+  shipSign.scale.multiplyScalar(.58);
+  ship.add(shipSign);
+
+  g.add(ship);
+
+  // Lighthouse on far eastern beach.
+  const lighthouse=new THREE.Mesh(new THREE.CylinderGeometry(3.4,4.2,20,16),white);
+  lighthouse.position.set(155,10,104);
+  g.add(lighthouse);
+  for(const yy of [5,11,17]){
+    const ring=new THREE.Mesh(new THREE.CylinderGeometry(4.35,4.35,2,16),red);
+    ring.position.set(155,yy,104);
+    g.add(ring);
+  }
+  const lightTop=new THREE.Mesh(new THREE.CylinderGeometry(5,4.2,5,16),glass);
+  lightTop.position.set(155,22.5,104);
+  g.add(lightTop);
+  const lightRoof=new THREE.Mesh(new THREE.ConeGeometry(5.6,4,16),red);
+  lightRoof.position.set(155,27,104);
+  g.add(lightRoof);
+
+  // Palm-lined beach and resort perimeter.
+  const palmSpots=[
+    [-155,-120],[-150,-70],[-154,-18],[-150,45],[-140,95],
+    [-105,135],[-60,145],[20,146],[78,140],[132,122],
+    [145,62],[148,18],[145,-40],[130,-92],
+    [-110,68],[-72,72],[72,70],[108,58],
+    [-130,-165],[-78,-185],[-15,-194],[58,-190],[112,-165]
+  ];
+  palmSpots.forEach(([x,z],i)=>palm(x,z,0.9+(i%3)*.08));
+
+  // Beach umbrellas / cabanas.
+  const umbColors=[red,yellow,blue,teal];
+  let ui=0;
+  for(const x of [-140,-110,-80,-50,-20,20,55,90,125]){
+    umbrella(x,148+(ui%2)*8,umbColors[ui%umbColors.length]);
+    ui++;
+  }
+
+  // Small retail / boardwalk pavilions.
+  for(const [x,z,mat] of [[-128,92,red],[-92,95,blue],[88,96,teal],[124,92,yellow]]){
+    const shop=new THREE.Mesh(new THREE.BoxGeometry(20,8,16),white);
+    shop.position.set(x,4.3,z);
+    g.add(shop);
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(22,1.2,18),mat);
+    roof.position.set(x,8.8,z);
+    g.add(roof);
+  }
+
+  // Make the whole resort click/tap readable.
+  scene.add(g);
+  clickable.push(g);
+  return g;
+}
+
+function setCruiseLockedAppearance(group,locked){
+  group.traverse(o=>{
+    if(o.isSprite) return;
+    const materials=Array.isArray(o.material)?o.material:[o.material];
+    materials.filter(Boolean).forEach(m=>{
+      if(!m.color) return;
+      if(m.userData.cruiseOriginalColor===undefined){
+        m.userData.cruiseOriginalColor=m.color.getHex();
+      }
+      if(locked){
+        const original=new THREE.Color(m.userData.cruiseOriginalColor);
+        const gray=(original.r+original.g+original.b)/3;
+        m.color.setRGB(gray*.72,gray*.76,gray*.79);
+      }else{
+        m.color.setHex(m.userData.cruiseOriginalColor);
+      }
+    });
+  });
+}
+
 const destinations = [
   building({name:'Marketing Studio',style:'marketing',footprint:3,x:-105,z:-48,w:25,d:20,h:24,color:0xdb7168,accent:0x813856,description:'Marketing content, social campaigns and brand growth.'}),
   building({name:'Accounting Hub',style:'accounting',footprint:3,x:-61,z:-48,w:24,d:20,h:28,color:0x609ed5,accent:0x2d5d93,description:'Invoices, bookkeeping, revenue, profit and forecasting.'}),
@@ -1717,6 +2050,12 @@ drawRevenueBubble(airportRevenueBubble,revenue);
 
 const transitRevenueBubble=createRevenueBubble('TRANSIT DISTRICT',25000,72,62,-322);
 drawRevenueBubble(transitRevenueBubble,revenue);
+
+const cruiseResort=createCruiseResort(-380,-40);
+setCruiseLockedAppearance(cruiseResort,true);
+
+const cruiseRevenueBubble=createRevenueBubble('CRUISE ISLAND',50000,-380,78,-38);
+drawRevenueBubble(cruiseRevenueBubble,revenue);
 
 // Major expansion landscaping: a formal arrival park and future-development pads.
 const transitDistrictGroup=new THREE.Group();
@@ -2134,7 +2473,20 @@ function unlockTransitDistrict(){
   transitStation.userData.description='Underground Central Station is open. Trains now enter and exit through the underground tunnels automatically.';
   transitStation.userData.train.visible=true;
   unlockTransitBridges();
-  islandStatus.textContent='Train District unlocked ✓';
+  islandStatus.textContent='Next expansion: Cruise Island · $50,000 revenue';
+  islandStatus.classList.remove('unlocked');
+}
+
+function unlockCruiseIsland(){
+  if(cruiseUnlocked) return;
+  cruiseUnlocked=true;
+  cruiseIsland.setTopMaterial(mats.sand);
+  cruiseRevenueBubble.sprite.visible=false;
+  setCruiseLockedAppearance(cruiseResort,false);
+  cruiseAccessBridge.visible=true;
+  cruiseAccessBridge.scale.x=.02;
+  cruiseResort.userData.description='Cruise Island Resort is open: beaches, hotels, marina, cruise terminal and the Business World flagship cruise liner.';
+  islandStatus.textContent='Cruise Island unlocked ✓';
   islandStatus.classList.add('unlocked');
 }
 
@@ -2147,6 +2499,7 @@ function updateMetrics(dt){
     revenueBubbleTimer=0;
     if(!airportUnlocked) drawRevenueBubble(airportRevenueBubble,revenue);
     if(!transitUnlocked) drawRevenueBubble(transitRevenueBubble,revenue);
+    if(!cruiseUnlocked) drawRevenueBubble(cruiseRevenueBubble,revenue);
   }
   const growth=((revenue-startRevenue)/startRevenue)*100;
   revenueEl.textContent='$'+Math.floor(revenue).toLocaleString();
@@ -2154,7 +2507,9 @@ function updateMetrics(dt){
   growthEl.textContent='+'+growth.toFixed(1)+'%';
   if(revenue>=10000) unlockAirport();
   if(revenue>=25000) unlockTransitDistrict();
+  if(revenue>=50000) unlockCruiseIsland();
   if(airportUnlocked && bridge.scale.x<1) bridge.scale.x=Math.min(1,bridge.scale.x+dt*.75);
+  if(cruiseUnlocked && cruiseAccessBridge.scale.x<1) cruiseAccessBridge.scale.x=Math.min(1,cruiseAccessBridge.scale.x+dt*.75);
 }
 
 function updateLighting(t){
@@ -2241,8 +2596,8 @@ function animate(){
   const t=clock.elapsedTime;
   controls.update();
   // Keep free panning usable without letting the camera get permanently lost.
-  controls.target.x = THREE.MathUtils.clamp(controls.target.x,-230,430);
-  controls.target.z = THREE.MathUtils.clamp(controls.target.z,-490,180);
+  controls.target.x = THREE.MathUtils.clamp(controls.target.x,-650,430);
+  controls.target.z = THREE.MathUtils.clamp(controls.target.z,-490,260);
   controls.target.y = THREE.MathUtils.clamp(controls.target.y,0,45);
   workers.forEach(w=>moveRoute(w,dt));
   cars.forEach(c=>updateDestinationCar(c,dt));
