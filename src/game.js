@@ -265,6 +265,7 @@ let revenue = 7500;
 let profit = 2650;
 let startRevenue = revenue;
 let airportUnlocked = false;
+let transitUnlocked = false;
 let timeMode = 'AUTO';
 let weatherMode = 'CLEAR';
 const GRID_TILE = 13;
@@ -371,13 +372,16 @@ const mainPoints = [
   [145,25],[127,76],[91,113],[39,134],[-24,137],[-81,127],[-124,100],[-147,55],[-154,3],[-150,-46]
 ];
 const airportPoints = [[142,-128],[186,-153],[246,-158],[305,-145],[344,-111],[356,-62],[350,-12],[326,34],[286,68],[230,79],[181,66],[146,38],[126,-5],[124,-58]];
+const transitPoints = [[194,108],[232,92],[290,91],[347,108],[382,141],[394,185],[386,229],[354,260],[304,276],[247,271],[205,252],[181,218],[176,169]];
 
 createShoreFoam(mainPoints,1.055);
 createShoreFoam(mainPoints,1.09);
 createShoreFoam(airportPoints,1.06);
+createShoreFoam(transitPoints,1.06);
 
 island(mainPoints, mats.grass, 17);
 const airportIsland = island(airportPoints, mats.locked, 18);
+const transitIsland = island(transitPoints, mats.locked, 18);
 // No separate line-grid overlay: each complete land block is one visible tile.
 
 function road(ax,az,bx,bz,width=10,bridge=false){
@@ -419,6 +423,12 @@ road(164,-58,310,-58,11);
 road(190,-120,190,44,11);
 road(258,-120,258,48,11);
 road(310,-105,310,38,11);
+
+// $25k Transit District local street grid.
+road(202,142,376,142,11);
+road(198,228,374,228,11);
+road(232,112,232,253,11);
+road(337,116,337,250,11);
 
 function spriteLabel(text,bg='#143e62'){
   const c=document.createElement('canvas'); c.width=512; c.height=160;
@@ -856,6 +866,221 @@ function createThinkHub(x,z){
   return g;
 }
 
+
+function createTransitStation(x,z){
+  const g=new THREE.Group();
+  g.position.set(x,.25,z);
+  g.userData={
+    name:'Underground Central Station',
+    description:'Locked Transit District. Unlocks when city revenue reaches $25,000.',
+    gridLot:true,
+    footprint:7,
+    footprintZ:6,
+    style:'transit'
+  };
+
+  const stone=new THREE.MeshStandardMaterial({color:0xe7e3da,roughness:.62});
+  const dark=new THREE.MeshStandardMaterial({color:0x202d38,roughness:.45});
+  const blue=new THREE.MeshStandardMaterial({color:0x2b7898,roughness:.4});
+  const silver=new THREE.MeshStandardMaterial({color:0xaebbc2,roughness:.3,metalness:.25});
+  const glass=new THREE.MeshPhysicalMaterial({color:0x6dcde9,roughness:.12,transparent:true,opacity:.82,transmission:.12,clearcoat:.55});
+  const railMat=new THREE.MeshStandardMaterial({color:0x33383c,roughness:.42,metalness:.48});
+  const sleeperMat=new THREE.MeshStandardMaterial({color:0x73513c,roughness:.8});
+  const yellowMat=new THREE.MeshStandardMaterial({color:0xf2c74d,roughness:.48});
+  const green=new THREE.MeshStandardMaterial({color:0x4b9851,roughness:1});
+
+  // Large civic plaza and station hall.
+  const plaza=new THREE.Mesh(new THREE.BoxGeometry(94,.65,73),stone);
+  plaza.position.set(0,.32,12);
+  plaza.receiveShadow=true;
+  g.add(plaza);
+
+  const hall=new THREE.Mesh(new THREE.BoxGeometry(58,18,31),stone);
+  hall.position.set(0,9.5,27);
+  hall.castShadow=true;
+  hall.receiveShadow=true;
+  g.add(hall);
+
+  const glassFront=new THREE.Mesh(new THREE.BoxGeometry(44,11,.45),glass);
+  glassFront.position.set(0,10.2,42.7);
+  g.add(glassFront);
+
+  // Curved premium roof, inspired by a modern metro/rail terminal.
+  for(const sx of [-23,-15,-7,1,9,17,25]){
+    const rib=new THREE.Mesh(new THREE.TorusGeometry(10.5,.45,10,30,Math.PI),silver);
+    rib.rotation.z=Math.PI/2;
+    rib.rotation.y=Math.PI/2;
+    rib.position.set(sx,20.3,27);
+    g.add(rib);
+  }
+  const roofSpine=new THREE.Mesh(new THREE.BoxGeometry(58,1.1,6),dark);
+  roofSpine.position.set(0,22.1,27);
+  g.add(roofSpine);
+
+  // Main underground entrance with stairs/escalator canopy.
+  const entranceBox=new THREE.Mesh(new THREE.BoxGeometry(22,7,15),dark);
+  entranceBox.position.set(-24,4.0,49);
+  g.add(entranceBox);
+  const entranceGlass=new THREE.Mesh(new THREE.BoxGeometry(17,5,.4),glass);
+  entranceGlass.position.set(-24,4.2,56.7);
+  g.add(entranceGlass);
+  const entranceCanopy=new THREE.Mesh(new THREE.BoxGeometry(25,.85,18),blue);
+  entranceCanopy.position.set(-24,8.0,49);
+  g.add(entranceCanopy);
+  for(let i=0;i<6;i++){
+    const step=new THREE.Mesh(new THREE.BoxGeometry(14,.36,1.7),stone);
+    step.position.set(-24,.45+i*.34,56-i*1.15);
+    g.add(step);
+  }
+
+  // Surface platform and visible rail segment before the train drops underground.
+  const platform=new THREE.Mesh(new THREE.BoxGeometry(138,.7,11),stone);
+  platform.position.set(0,.4,-4);
+  g.add(platform);
+  const safety=new THREE.Mesh(new THREE.BoxGeometry(136,.14,.65),yellowMat);
+  safety.position.set(0,.82,-9.0);
+  g.add(safety);
+
+  for(const rz of [-2.05,2.05]){
+    const rail=new THREE.Mesh(new THREE.BoxGeometry(164,.32,.34),railMat);
+    rail.position.set(0,.44,rz-17);
+    g.add(rail);
+  }
+  for(let xx=-80;xx<=80;xx+=4.6){
+    const tie=new THREE.Mesh(new THREE.BoxGeometry(.42,.22,6.2),sleeperMat);
+    tie.position.set(xx,.25,-17);
+    g.add(tie);
+  }
+
+  // Two tunnel mouths make it clear the rail line dives underground in both directions.
+  for(const sx of [-82,82]){
+    const portal=new THREE.Mesh(new THREE.BoxGeometry(12,9,11),dark);
+    portal.position.set(sx,4.2,-17);
+    g.add(portal);
+    const portalGlass=new THREE.Mesh(new THREE.PlaneGeometry(8.6,6.1),new THREE.MeshBasicMaterial({color:0x07131d}));
+    portalGlass.rotation.y=sx<0?Math.PI/2:-Math.PI/2;
+    portalGlass.position.set(sx+(sx<0?6.05:-6.05),4.2,-17);
+    g.add(portalGlass);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(13.5,1.0,12.5),silver);
+    cap.position.set(sx,9.1,-17);
+    g.add(cap);
+  }
+
+  // Small parking/service court, sidewalks and landscaping.
+  const parking=new THREE.Mesh(new THREE.BoxGeometry(47,.32,23),new THREE.MeshStandardMaterial({color:0x3d4449,roughness:.93}));
+  parking.position.set(49,.22,37);
+  g.add(parking);
+  for(let px=31;px<=67;px+=9){
+    const stripe=new THREE.Mesh(new THREE.BoxGeometry(.22,.08,18),new THREE.MeshStandardMaterial({color:0xf4f1e7,roughness:.8}));
+    stripe.position.set(px,.43,37);
+    g.add(stripe);
+  }
+  for(const [tx,tz] of [[-42,30],[-42,47],[39,17],[65,18],[70,50],[-5,52]]){
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.32,.48,3.2,8),new THREE.MeshStandardMaterial({color:0x77513b,roughness:1}));
+    trunk.position.set(tx,1.8,tz);
+    g.add(trunk);
+    const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(2.2,1),green);
+    crown.position.set(tx,5,tz);
+    crown.castShadow=true;
+    g.add(crown);
+  }
+
+  // Animated metro train.
+  const train=new THREE.Group();
+  train.position.set(-88,-4,-17);
+  const trainBody=new THREE.MeshStandardMaterial({color:0xd8e0e4,roughness:.35,metalness:.18});
+  const trainBlue=new THREE.MeshStandardMaterial({color:0x176d9a,roughness:.38});
+  const trainWindow=new THREE.MeshStandardMaterial({color:0x17394b,emissive:0x0d3447,emissiveIntensity:.55,roughness:.22});
+  for(let carIndex=0;carIndex<4;carIndex++){
+    const carX=-18+carIndex*12;
+    const body=new THREE.Mesh(new THREE.BoxGeometry(10.7,4.6,5.2),trainBody);
+    body.position.set(carX,2.8,0);
+    body.castShadow=true;
+    train.add(body);
+    const stripe=new THREE.Mesh(new THREE.BoxGeometry(10.9,.75,5.35),trainBlue);
+    stripe.position.set(carX,2.25,0);
+    train.add(stripe);
+    for(const wz of [-2.68,2.68]){
+      for(const wx of [-3.4,0,3.4]){
+        const win=new THREE.Mesh(new THREE.BoxGeometry(2.25,1.35,.12),trainWindow);
+        win.position.set(carX+wx,3.45,wz);
+        train.add(win);
+      }
+    }
+  }
+  const head=new THREE.Mesh(new THREE.BoxGeometry(2.2,3.2,4.7),trainBlue);
+  head.position.set(25,2.8,0);
+  train.add(head);
+  train.visible=false;
+  g.add(train);
+
+  const sign=spriteLabel('UNDERGROUND CENTRAL','#173b55');
+  sign.position.set(0,14.2,43.3);
+  sign.scale.multiplyScalar(.86);
+  g.add(sign);
+
+  const subwaySign=spriteLabel('TRAIN  •  METRO  •  $25K DISTRICT','#225f7d');
+  subwaySign.position.set(-24,10.5,50);
+  subwaySign.scale.multiplyScalar(.53);
+  g.add(subwaySign);
+
+  // Save the station's normal colors so the whole district can appear grey while locked.
+  g.traverse(o=>{
+    if(o.isSprite) return;
+    const materials=Array.isArray(o.material)?o.material:[o.material];
+    materials.filter(Boolean).forEach(m=>{
+      if(m.color && m.userData.transitOriginalColor===undefined){
+        m.userData.transitOriginalColor=m.color.getHex();
+      }
+    });
+  });
+
+  g.userData.train=train;
+  scene.add(g);
+  clickable.push(g);
+  return g;
+}
+
+function setTransitStationLockedAppearance(station,locked){
+  station.traverse(o=>{
+    if(o.isSprite) return;
+    const materials=Array.isArray(o.material)?o.material:[o.material];
+    materials.filter(Boolean).forEach(m=>{
+      if(!m.color) return;
+      if(locked){
+        if(m.userData.transitOriginalColor===undefined) m.userData.transitOriginalColor=m.color.getHex();
+        m.color.setHex(0x747a7e);
+      }else if(m.userData.transitOriginalColor!==undefined){
+        m.color.setHex(m.userData.transitOriginalColor);
+      }
+    });
+  });
+}
+
+let transitTrainPhase=0;
+function updateTransitTrain(dt){
+  if(!transitUnlocked || !transitStation?.userData?.train) return;
+  const train=transitStation.userData.train;
+  transitTrainPhase=(transitTrainPhase+dt)%22;
+
+  // Wait underground briefly, then emerge, pass the station, and descend again.
+  if(transitTrainPhase<2 || transitTrainPhase>20){
+    train.visible=false;
+    return;
+  }
+
+  train.visible=true;
+  const u=(transitTrainPhase-2)/18;
+  const x=-92 + 184*u;
+  let y=1.5;
+  if(u<.13) y=-5+(u/.13)*6.5;
+  else if(u>.87) y=1.5-((u-.87)/.13)*6.5;
+
+  train.position.x=x;
+  train.position.y=y;
+  train.rotation.y=0;
+}
+
 const destinations = [
   building({name:'Marketing Studio',style:'marketing',footprint:3,x:-105,z:-48,w:25,d:20,h:24,color:0xdb7168,accent:0x813856,description:'Marketing content, social campaigns and brand growth.'}),
   building({name:'Accounting Hub',style:'accounting',footprint:3,x:-61,z:-48,w:24,d:20,h:28,color:0x609ed5,accent:0x2d5d93,description:'Invoices, bookkeeping, revenue, profit and forecasting.'}),
@@ -888,6 +1113,14 @@ for(const sx of [226,246,266,286]){
   gateMark.position.set(sx,.47,-52);
   scene.add(gateMark);
 }
+
+const transitStation=createTransitStation(285,181);
+setTransitStationLockedAppearance(transitStation,true);
+
+const transitLockLabel=spriteLabel('LOCKED · $25,000 REVENUE','#4d5358');
+transitLockLabel.position.set(285,18,128);
+transitLockLabel.scale.multiplyScalar(.9);
+scene.add(transitLockLabel);
 
 // DESTINATION PARKING
 // Every building gets a real parking lot. Cars remain visible when parked,
@@ -1241,14 +1474,27 @@ function unlockAirport(){
   airportIsland.setTopMaterial(mats.grass2);
   bridge.visible=true;
   bridge.scale.x=.02;
-  islandStatus.textContent='Airport Island unlocked ✓';
-  islandStatus.classList.add('unlocked');
+  islandStatus.textContent='Next expansion: Train District · $25,000 revenue';
+  islandStatus.classList.remove('unlocked');
   airportBuilding.userData.description='Airport expansion unlocked. This island can now support logistics, travel and future buildings.';
   airportBuilding.traverse(o=>{
     if(o.material && o.material.color && o!==airportBuilding){
       o.material.color.offsetHSL(0,0,.14);
     }
   });
+}
+
+
+function unlockTransitDistrict(){
+  if(transitUnlocked) return;
+  transitUnlocked=true;
+  transitIsland.setTopMaterial(mats.grass2);
+  setTransitStationLockedAppearance(transitStation,false);
+  transitStation.userData.description='Underground Central Station is open. Trains now enter and exit through the underground tunnels automatically.';
+  transitStation.userData.train.visible=true;
+  transitLockLabel.visible=false;
+  islandStatus.textContent='Train District unlocked ✓';
+  islandStatus.classList.add('unlocked');
 }
 
 function updateMetrics(dt){
@@ -1259,6 +1505,7 @@ function updateMetrics(dt){
   profitEl.textContent='$'+Math.floor(profit).toLocaleString();
   growthEl.textContent='+'+growth.toFixed(1)+'%';
   if(revenue>=10000) unlockAirport();
+  if(revenue>=25000) unlockTransitDistrict();
   if(airportUnlocked && bridge.scale.x<1) bridge.scale.x=Math.min(1,bridge.scale.x+dt*.75);
 }
 
@@ -1346,11 +1593,12 @@ function animate(){
   const t=clock.elapsedTime;
   controls.update();
   // Keep free panning usable without letting the camera get permanently lost.
-  controls.target.x = THREE.MathUtils.clamp(controls.target.x,-185,300);
-  controls.target.z = THREE.MathUtils.clamp(controls.target.z,-175,165);
+  controls.target.x = THREE.MathUtils.clamp(controls.target.x,-185,430);
+  controls.target.z = THREE.MathUtils.clamp(controls.target.z,-175,310);
   controls.target.y = THREE.MathUtils.clamp(controls.target.y,0,45);
   workers.forEach(w=>moveRoute(w,dt));
   cars.forEach(c=>updateDestinationCar(c,dt));
+  updateTransitTrain(dt);
   updateMetrics(dt);
   updateLighting(t);
   updateWeather(dt);
