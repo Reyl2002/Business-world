@@ -21,8 +21,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x78cae6);
-scene.fog = new THREE.FogExp2(0x8ed4e9, 0.0018);
+scene.background = new THREE.Color(0x92d9ef);
+scene.fog = new THREE.FogExp2(0xa6deef, 0.00145);
 
 const camera = new THREE.PerspectiveCamera(42, innerWidth/innerHeight, 0.1, 1800);
 camera.position.set(170, 145, 205);
@@ -59,13 +59,52 @@ sun.shadow.camera.top = 310;
 sun.shadow.camera.bottom = -310;
 scene.add(sun);
 
+// Darker animated ocean so the water is clearly separate from the sky.
+const oceanGeo = new THREE.PlaneGeometry(1100, 900, 92, 76);
+oceanGeo.rotateX(-Math.PI/2);
+const oceanBase = Float32Array.from(oceanGeo.attributes.position.array);
+
 const oceanMat = new THREE.MeshPhysicalMaterial({
-  color:0x1598bc, roughness:.2, transparent:true, opacity:.9, clearcoat:.25
+  color:0x075b8f,
+  roughness:.24,
+  metalness:.04,
+  transparent:true,
+  opacity:.97,
+  clearcoat:.7,
+  clearcoatRoughness:.16
 });
-const ocean = new THREE.Mesh(new THREE.PlaneGeometry(1100, 900), oceanMat);
-ocean.rotation.x = -Math.PI/2;
+const ocean = new THREE.Mesh(oceanGeo, oceanMat);
 ocean.position.y = -14;
+ocean.receiveShadow = true;
 scene.add(ocean);
+
+// A darker layer underneath gives the ocean more depth instead of a flat cyan sheet.
+const oceanDepth = new THREE.Mesh(
+  new THREE.PlaneGeometry(1100,900),
+  new THREE.MeshBasicMaterial({color:0x033c67})
+);
+oceanDepth.rotation.x = -Math.PI/2;
+oceanDepth.position.y = -18.5;
+scene.add(oceanDepth);
+
+let oceanNormalTick=0;
+function updateOcean(t){
+  const pos=oceanGeo.attributes.position;
+  const a=pos.array;
+  for(let i=0;i<pos.count;i++){
+    const x=oceanBase[i*3];
+    const z=oceanBase[i*3+2];
+    const wave1=Math.sin(x*.018+t*1.15)*.72;
+    const wave2=Math.sin(z*.024-t*.82)*.48;
+    const wave3=Math.sin((x+z)*.012+t*.58)*.28;
+    a[i*3+1]=oceanBase[i*3+1]+wave1+wave2+wave3;
+  }
+  pos.needsUpdate=true;
+
+  // Refresh reflections periodically without making mobile performance too heavy.
+  oceanNormalTick++;
+  if(oceanNormalTick%6===0) oceanGeo.computeVertexNormals();
+}
 
 const mats = {
   grass:new THREE.MeshStandardMaterial({color:0x73b959, roughness:.95}),
@@ -833,9 +872,9 @@ function updateLighting(t){
     const c=(t*.015)%4;
     phase=c<1.5?'DAY':c<2.3?'DUSK':c<3.2?'NIGHT':'DUSK';
   }
-  if(phase==='DAY'){scene.background.setHex(0x78cae6);hemi.intensity=2.25;sun.intensity=3.1;renderer.toneMappingExposure=1.05}
-  else if(phase==='DUSK'){scene.background.setHex(0x789ab8);hemi.intensity=1.35;sun.intensity=1.7;renderer.toneMappingExposure=.88}
-  else {scene.background.setHex(0x14243d);hemi.intensity=.55;sun.intensity=.65;renderer.toneMappingExposure=.68}
+  if(phase==='DAY'){scene.background.setHex(0x92d9ef);hemi.intensity=2.25;sun.intensity=3.1;renderer.toneMappingExposure=1.05}
+  else if(phase==='DUSK'){scene.background.setHex(0x829eb9);hemi.intensity=1.35;sun.intensity=1.7;renderer.toneMappingExposure=.88}
+  else {scene.background.setHex(0x1b2e4a);hemi.intensity=.55;sun.intensity=.65;renderer.toneMappingExposure=.68}
 }
 
 const rainCount=550;
@@ -919,6 +958,7 @@ function animate(){
   updateMetrics(dt);
   updateLighting(t);
   updateWeather(dt);
+  updateOcean(t);
   boardTick+=dt;
   if(boardTick>.8){boardTick=0;drawBoard()}
   renderer.render(scene,camera);
