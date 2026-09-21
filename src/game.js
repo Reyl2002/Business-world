@@ -670,11 +670,37 @@ function makeUnfinishedTransitBridge({x,cityZ,transitZ,labelZ,variant=0}){
   const group=new THREE.Group();
   scene.add(group);
 
-  // Build the ACTUAL full bridge now so it clearly connects the two streets.
-  const unfinishedDeck=road(x,cityZ,x,transitZ,11,true);
+  // Overlap the bridge into each street by several units so there is no visible water seam.
+  // cityZ is closer to the original city/airport side; transitZ is on the $25k island side.
+  const direction=Math.sign(transitZ-cityZ)||-1;
+  const overlap=7;
+  const deckCityZ=cityZ-direction*overlap;
+  const deckTransitZ=transitZ+direction*overlap;
+
+  // Build the ACTUAL full bridge now so it clearly connects flush to both roads.
+  const unfinishedDeck=road(x,deckCityZ,x,deckTransitZ,11,true);
   group.add(unfinishedDeck);
 
-  addBridgePillars(group,x,cityZ,transitZ);
+  // Add low transition slabs at both ends to hide the height change from street to bridge.
+  for(const z of [cityZ,transitZ]){
+    const transition=new THREE.Mesh(
+      new THREE.BoxGeometry(11.4,.7,7.5),
+      mats.road
+    );
+    transition.position.set(x,1.1,z);
+    transition.receiveShadow=true;
+    transition.castShadow=true;
+    group.add(transition);
+
+    const edgeL=new THREE.Mesh(new THREE.BoxGeometry(.5,.85,7.5),bridgeConcreteDark);
+    edgeL.position.set(x-5.45,1.3,z);
+    group.add(edgeL);
+    const edgeR=edgeL.clone();
+    edgeR.position.x=x+5.45;
+    group.add(edgeR);
+  }
+
+  addBridgePillars(group,x,deckCityZ,deckTransitZ);
   addUnfinishedBridgeDetails(group,x,cityZ,transitZ,variant);
 
   const mid=(cityZ+transitZ)/2;
@@ -686,8 +712,8 @@ function makeUnfinishedTransitBridge({x,cityZ,transitZ,labelZ,variant=0}){
 
   transitBrokenBridgeGroups.push(group);
 
-  // Clean finished bridge swaps in at unlock.
-  const completed=road(x,cityZ,x,transitZ,11,true);
+  // Clean finished bridge swaps in at unlock and uses the same overlap so it stays flush.
+  const completed=road(x,deckCityZ,x,deckTransitZ,11,true);
   completed.visible=false;
   transitCompleteBridges.push(completed);
 }
