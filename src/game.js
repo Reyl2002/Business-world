@@ -378,10 +378,13 @@ const airportPoints = [
   [416,-42],[394,20],[362,72],[314,106],[252,119],[190,112],
   [145,90],[132,52],[138,16],[154,-10],[160,-55],[152,-112]
 ];
+const TRANSIT_Z_SHIFT=-140;
+const transitZ=z=>z+TRANSIT_Z_SHIFT;
+
 const transitPoints = [
   [-120,-420],[-52,-452],[45,-466],[145,-454],[226,-420],[268,-368],[277,-308],
   [258,-250],[214,-211],[136,-190],[45,-192],[-45,-214],[-108,-254],[-137,-310],[-136,-365]
-];
+].map(([x,z])=>[x,transitZ(z)]);
 const cruisePoints = [
   // Huge $50k resort island shaped to fill the large western water gap.
   // The north-east shoulder reaches toward the Transit District, while the
@@ -452,29 +455,29 @@ road(258,-120,258,48,11);
 road(330,-130,330,55,11);
 road(390,-105,390,48,11);
 
-// $25k Transit District — a major expansion zone above the original city.
-// Roads loop around the rail terminal and leave large square areas open for future buildings.
-road(-92,-232,226,-232,12);
-road(-108,-402,236,-402,12);
-road(-111,-276,218,-276,10);
-road(-108,-370,235,-370,10);
-road(-72,-425,-72,-214,11);
-road(72,-445,72,-205,12);
-road(205,-420,205,-224,11);
+// $25k Transit District — moved farther away to create a much larger water channel.
+// All district roads shift together so the island keeps its existing layout.
+road(-92,transitZ(-232),226,transitZ(-232),12);
+road(-108,transitZ(-402),236,transitZ(-402),12);
+road(-111,transitZ(-276),218,transitZ(-276),10);
+road(-108,transitZ(-370),235,transitZ(-370),10);
+road(-72,transitZ(-425),-72,transitZ(-214),11);
+road(72,transitZ(-445),72,transitZ(-205),12);
+road(205,transitZ(-420),205,transitZ(-224),11);
 
 // Two short boulevard spurs frame the civic station plaza without crossing the tracks.
-road(-72,-320,-18,-320,10);
-road(158,-320,205,-320,10);
+road(-72,transitZ(-320),-18,transitZ(-320),10);
+road(158,transitZ(-320),205,transitZ(-320),10);
 
-// Road approaches for the two $25k bridge connections.
-// These intentionally meet existing streets on both sides of the water gap.
+// City/airport-side approaches remain where they are.
+// The transit-side approaches move with the island, leaving a large open-water gap.
 road(-36,-116,-36,-145,11);
-road(-72,-232,-36,-232,11);
-road(-36,-232,-36,-191,11);
+road(-72,transitZ(-232),-36,transitZ(-232),11);
+road(-36,transitZ(-232),-36,transitZ(-191),11);
 
 road(190,-120,205,-120,11);
 road(205,-120,205,-158,11);
-road(205,-224,205,-208,11);
+road(205,transitZ(-224),205,transitZ(-208),11);
 
 // $50k Cruise Island — the largest expansion on the map.
 road(-530,-145,-225,-145,12);
@@ -1110,8 +1113,20 @@ function makeUnfinishedTransitBridge({x,cityZ,transitZ,labelZ,variant=0}){
 }
 
 // Both bridges line up directly with existing street approaches.
-makeUnfinishedTransitBridge({x:-36,cityZ:-145,transitZ:-191,labelZ:-168,variant:0});
-makeUnfinishedTransitBridge({x:205,cityZ:-158,transitZ:-208,labelZ:-183,variant:1});
+makeUnfinishedTransitBridge({
+  x:-36,
+  cityZ:-145,
+  transitZ:transitZ(-191),
+  labelZ:(-145+transitZ(-191))/2,
+  variant:0
+});
+makeUnfinishedTransitBridge({
+  x:205,
+  cityZ:-158,
+  transitZ:transitZ(-208),
+  labelZ:(-158+transitZ(-208))/2,
+  variant:1
+});
 
 function unlockTransitBridges(){
   transitBrokenBridgeGroups.forEach(g=>g.visible=false);
@@ -2341,13 +2356,13 @@ buildZoneLabel.scale.multiplyScalar(.7);
 airportBuildZone.add(buildZoneLabel);
 scene.add(airportBuildZone);
 
-const transitStation=createTransitStation(72,-322);
+const transitStation=createTransitStation(72,transitZ(-322));
 setTransitStationLockedAppearance(transitStation,true);
 
 const airportRevenueBubble=createRevenueBubble('AIRPORT ISLAND',10000,258,56,-24);
 drawRevenueBubble(airportRevenueBubble,revenue);
 
-const transitRevenueBubble=createRevenueBubble('TRANSIT DISTRICT',25000,72,62,-322);
+const transitRevenueBubble=createRevenueBubble('TRANSIT DISTRICT',25000,72,62,transitZ(-322));
 drawRevenueBubble(transitRevenueBubble,revenue);
 
 const cruiseResort=createCruiseResort(-380,-40);
@@ -2363,16 +2378,17 @@ const transitStoneMat=new THREE.MeshStandardMaterial({color:0xd9d4c9,roughness:.
 const transitLockedPadMat=new THREE.MeshStandardMaterial({color:0x858a8d,roughness:.95});
 
 const transitPark=new THREE.Mesh(new THREE.CylinderGeometry(27,28,.6,40),transitParkMat);
-transitPark.position.set(-16,.38,-324);
+transitPark.position.set(-16,.38,transitZ(-324));
 transitPark.receiveShadow=true;
 transitDistrictGroup.add(transitPark);
 
 const transitParkRing=new THREE.Mesh(new THREE.RingGeometry(29,34,40),transitStoneMat);
 transitParkRing.rotation.x=-Math.PI/2;
-transitParkRing.position.set(-16,.72,-324);
+transitParkRing.position.set(-16,.72,transitZ(-324));
 transitDistrictGroup.add(transitParkRing);
 
-for(const [tx,tz] of [[-34,-324],[-25,-307],[-7,-307],[2,-324],[-7,-341],[-25,-341]]){
+for(const [tx,tzBase] of [[-34,-324],[-25,-307],[-7,-307],[2,-324],[-7,-341],[-25,-341]]){
+  const tz=transitZ(tzBase);
   const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.34,.46,3.2,8),new THREE.MeshStandardMaterial({color:0x75513a,roughness:1}));
   trunk.position.set(tx,1.7,tz);
   transitDistrictGroup.add(trunk);
@@ -2383,14 +2399,14 @@ for(const [tx,tz] of [[-34,-324],[-25,-307],[-7,-307],[2,-324],[-7,-341],[-25,-3
 }
 
 // Grey development pads make it obvious this $25k district has room for future towers and businesses.
-for(const [px,pz,sx,sz] of [
+for(const [px,pzBase,sx,sz] of [
   [-52,-252,48,34],
   [160,-252,54,34],
   [-48,-386,52,28],
   [162,-386,58,28]
 ]){
   const pad=new THREE.Mesh(new THREE.BoxGeometry(sx,.32,sz),transitLockedPadMat);
-  pad.position.set(px,.28,pz);
+  pad.position.set(px,.28,transitZ(pzBase));
   pad.receiveShadow=true;
   transitDistrictGroup.add(pad);
 }
@@ -2896,7 +2912,7 @@ function animate(){
   controls.update();
   // Keep free panning usable without letting the camera get permanently lost.
   controls.target.x = THREE.MathUtils.clamp(controls.target.x,-710,430);
-  controls.target.z = THREE.MathUtils.clamp(controls.target.z,-490,260);
+  controls.target.z = THREE.MathUtils.clamp(controls.target.z,-680,260);
   controls.target.y = THREE.MathUtils.clamp(controls.target.y,0,45);
   workers.forEach(w=>moveRoute(w,dt));
   cars.forEach(c=>updateDestinationCar(c,dt));
