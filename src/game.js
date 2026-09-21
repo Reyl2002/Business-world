@@ -409,6 +409,158 @@ const transitIsland = island(transitPoints, mats.locked, 18);
 const cruiseIsland = island(cruisePoints, mats.locked, 19);
 // No separate line-grid overlay: each complete land block is one visible tile.
 
+// MAIN-ISLAND BEACH
+// Shore sand is always built as a PAIR of 1x1 tiles:
+// 1) one full 1x1 sand tile inland,
+// 2) one full 1x1 shoreline tile directly in front of it that slopes to the water.
+// A shoreline slope is never created without its backing sand tile.
+const beachGroup=new THREE.Group();
+const beachSandMat=new THREE.MeshStandardMaterial({color:0xe8c77f,roughness:1});
+const beachWetSandMat=new THREE.MeshStandardMaterial({color:0xd4ae68,roughness:.95});
+const beachWoodMat=new THREE.MeshStandardMaterial({color:0x9b724d,roughness:.85});
+const beachUmbrellaRed=new THREE.MeshStandardMaterial({color:0xe85c55,roughness:.6});
+const beachUmbrellaCream=new THREE.MeshStandardMaterial({color:0xfff0c9,roughness:.7});
+const beachPalmMat=new THREE.MeshStandardMaterial({color:0x4f9b52,roughness:1});
+const beachTrunkMat=new THREE.MeshStandardMaterial({color:0x8a603e,roughness:1});
+const beachNpcColors=[0xe4574f,0x4a8ddd,0xf2b642,0x8b5ec8,0x4ca46d];
+
+function createShoreSlopeGeometry(){
+  const h=GRID_TILE/2;
+  const yHigh=.34;
+  const yLow=-13.15;
+  const yBottom=-14.1;
+
+  const verts=new Float32Array([
+    -h,yHigh,-h,   -h,yHigh,h,    h,yLow,h,     h,yLow,-h,
+    -h,yBottom,-h, -h,yBottom,h,  h,yBottom,h,  h,yBottom,-h
+  ]);
+  const idx=[
+    0,1,2, 0,2,3,
+    7,6,5, 7,5,4,
+    0,4,5, 0,5,1,
+    3,2,6, 3,6,7,
+    1,5,6, 1,6,2,
+    0,3,7, 0,7,4
+  ];
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(verts,3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+const beachSlopeGeometry=createShoreSlopeGeometry();
+const beachRelaxSpots=[];
+
+function addBeachSandPair(backX,z){
+  // Backing 1x1 sand plot.
+  const back=new THREE.Mesh(
+    new THREE.BoxGeometry(GRID_TILE-.35,.26,GRID_TILE-.35),
+    beachSandMat
+  );
+  back.position.set(backX,.28,z);
+  back.receiveShadow=true;
+  beachGroup.add(back);
+
+  // Front 1x1 plot slopes from land height down to the water.
+  const front=new THREE.Mesh(beachSlopeGeometry,beachWetSandMat);
+  front.position.set(backX+GRID_TILE,0,z);
+  front.receiveShadow=true;
+  front.castShadow=true;
+  beachGroup.add(front);
+
+  beachRelaxSpots.push(
+    new THREE.Vector3(backX-2,.5,z-2),
+    new THREE.Vector3(backX+2,.5,z+2)
+  );
+}
+
+function addBeachUmbrella(x,z,flip=false){
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(.08,.11,2.6,8),beachWoodMat);
+  pole.position.set(x,1.5,z);
+  beachGroup.add(pole);
+  const shade=new THREE.Mesh(
+    new THREE.ConeGeometry(1.8,.8,16),
+    flip?beachUmbrellaCream:beachUmbrellaRed
+  );
+  shade.position.set(x,3.05,z);
+  shade.rotation.x=Math.PI;
+  beachGroup.add(shade);
+}
+
+function addBeachChair(x,z,rot=0){
+  const chair=new THREE.Group();
+  chair.position.set(x,.55,z);
+  chair.rotation.y=rot;
+  const seat=new THREE.Mesh(new THREE.BoxGeometry(2.6,.22,1.15),beachWoodMat);
+  seat.rotation.z=-.12;
+  chair.add(seat);
+  const back=new THREE.Mesh(new THREE.BoxGeometry(.22,1.7,1.15),beachWoodMat);
+  back.position.set(-1.2,.72,0);
+  back.rotation.z=-.25;
+  chair.add(back);
+  beachGroup.add(chair);
+}
+
+function addBeachPalm(x,z,s=1){
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.22*s,.42*s,4.8*s,8),beachTrunkMat);
+  trunk.position.set(x,2.4*s,z);
+  beachGroup.add(trunk);
+  for(let i=0;i<6;i++){
+    const leaf=new THREE.Mesh(new THREE.ConeGeometry(.8*s,3.4*s,5),beachPalmMat);
+    leaf.position.set(x,5.15*s,z);
+    leaf.rotation.z=Math.PI/2;
+    leaf.rotation.y=i*Math.PI/3;
+    leaf.scale.set(1,.45,1);
+    beachGroup.add(leaf);
+  }
+}
+
+function addRelaxingNpc(x,z,colorIndex=0){
+  const g=new THREE.Group();
+  g.position.set(x,.34,z);
+  const body=new THREE.Mesh(
+    new THREE.CylinderGeometry(.34,.43,1.35,8),
+    new THREE.MeshStandardMaterial({color:beachNpcColors[colorIndex%beachNpcColors.length]})
+  );
+  body.position.y=.85;
+  g.add(body);
+  const head=new THREE.Mesh(
+    new THREE.SphereGeometry(.34,10,8),
+    new THREE.MeshStandardMaterial({color:0xf0c4a0})
+  );
+  head.position.y=1.75;
+  g.add(head);
+  beachGroup.add(g);
+}
+
+// Eight shoreline sections: every water-facing tile has exactly one 1x1 sand plot behind it.
+for(const z of [-6.5,6.5,19.5,32.5,45.5,58.5,71.5,84.5]){
+  addBeachSandPair(124.5,z);
+}
+
+addBeachUmbrella(121,8,false);
+addBeachUmbrella(121,35,true);
+addBeachUmbrella(121,63,false);
+addBeachChair(118,17,.15);
+addBeachChair(119,50,-.15);
+addBeachChair(118,77,.1);
+addBeachPalm(118,-1,.9);
+addBeachPalm(119,28,1.0);
+addBeachPalm(118,58,.92);
+addBeachPalm(119,86,.88);
+addRelaxingNpc(121,18,0);
+addRelaxingNpc(120,48,1);
+addRelaxingNpc(121,76,3);
+
+beachGroup.userData={
+  name:'Beach',
+  description:'A relaxing NPC beach. Shoreline sand uses paired 1x1 plots: one backing sand tile is required behind every sloped water-edge sand tile.',
+  relaxSpots:beachRelaxSpots
+};
+scene.add(beachGroup);
+clickable.push(beachGroup);
+
 function road(ax,az,bx,bz,width=10,bridge=false){
   const dx=bx-ax, dz=bz-az, len=Math.hypot(dx,dz), angle=Math.atan2(dz,dx);
   const group = new THREE.Group();
@@ -1141,6 +1293,110 @@ function updateTransitBridgeBuild(dt){
   if(!transitUnlocked) return;
   transitCompleteBridges.forEach(b=>{
     if(b.scale.z<1) b.scale.z=Math.min(1,b.scale.z+dt*1.8);
+  });
+}
+
+// Additional locked progression bridges shown in the red-marked locations.
+const progressionBridges=[];
+
+function addLineBridgePillars(group,ax,az,bx,bz){
+  const len=Math.hypot(bx-ax,bz-az);
+  const count=Math.max(2,Math.floor(len/22));
+  for(let i=1;i<count;i++){
+    const t=i/count;
+    const x=THREE.MathUtils.lerp(ax,bx,t);
+    const z=THREE.MathUtils.lerp(az,bz,t);
+    const pier=new THREE.Mesh(
+      new THREE.BoxGeometry(5.4,18.5,5.4),
+      bridgeConcreteMat
+    );
+    pier.position.set(x,-6.8,z);
+    pier.castShadow=true;
+    group.add(pier);
+
+    const footing=new THREE.Mesh(
+      new THREE.BoxGeometry(8.2,2.0,8.2),
+      bridgeConcreteDark
+    );
+    footing.position.set(x,-14.8,z);
+    group.add(footing);
+  }
+}
+
+function makeLockedProgressBridge({ax,az,bx,bz,target,labelText}){
+  const lockedGroup=new THREE.Group();
+  scene.add(lockedGroup);
+
+  const deck=road(ax,az,bx,bz,11,true);
+  lockedGroup.add(deck);
+  addLineBridgePillars(lockedGroup,ax,az,bx,bz);
+
+  const dx=bx-ax,dz=bz-az;
+  const angle=-Math.atan2(dz,dx);
+  const startBarrier=new THREE.Group();
+  startBarrier.position.set(ax,0,az);
+  startBarrier.rotation.y=angle;
+  addBridgeBarricade(startBarrier,0,0,0);
+  lockedGroup.add(startBarrier);
+
+  const endBarrier=new THREE.Group();
+  endBarrier.position.set(bx,0,bz);
+  endBarrier.rotation.y=angle;
+  addBridgeBarricade(endBarrier,0,0,Math.PI);
+  lockedGroup.add(endBarrier);
+
+  const midX=(ax+bx)/2,midZ=(az+bz)/2;
+  const lockLabel=spriteLabel(labelText,'#243847');
+  lockLabel.position.set(midX,13,midZ);
+  lockLabel.scale.multiplyScalar(.68);
+  scene.add(lockLabel);
+
+  const completed=road(ax,az,bx,bz,11,true);
+  completed.visible=false;
+
+  progressionBridges.push({
+    target,
+    lockedGroup,
+    label:lockLabel,
+    completed,
+    active:false
+  });
+}
+
+// Left red bridge: main city to the $50k Cruise Island.
+makeLockedProgressBridge({
+  ax:-86,az:-116,
+  bx:-184,bz:-120,
+  target:'cruise',
+  labelText:'LOCKED · $50K'
+});
+
+// Center red bridge: main city north to Transit District.
+// It lands on a T/three-way junction on the top island.
+makeLockedProgressBridge({
+  ax:35,az:-140,
+  bx:35,bz:transitZ(-214),
+  target:'transit',
+  labelText:'LOCKED · $25K'
+});
+
+// Three-way road junction on the Transit District side.
+road(35,transitZ(-214),35,transitZ(-245),11);
+road(-28,transitZ(-245),98,transitZ(-245),11);
+
+function updateProgressionBridges(dt){
+  progressionBridges.forEach(link=>{
+    const unlocked=link.target==='transit'?transitUnlocked:cruiseUnlocked;
+    if(unlocked && !link.active){
+      link.active=true;
+      link.lockedGroup.visible=false;
+      link.label.visible=false;
+      link.completed.visible=true;
+      link.completed.scale.x=.03;
+    }
+    if(link.active && link.completed.scale.x<1){
+      link.completed.scale.x=Math.min(1,link.completed.scale.x+dt*1.5);
+    }
   });
 }
 
@@ -2919,6 +3175,7 @@ function animate(){
   updateDecorativeAirportPlanes(dt);
   updateTransitTrain(dt);
   updateTransitBridgeBuild(dt);
+  updateProgressionBridges(dt);
   updateMetrics(dt);
   updateLighting(t);
   updateWeather(dt);
