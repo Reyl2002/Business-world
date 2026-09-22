@@ -2720,6 +2720,62 @@ const destinations = [
   boatDock,
 ].filter(Boolean);
 
+// BUSINESS DISTRICT
+// These are the physical business-tool buildings that make Business World more than a city skin.
+// Their detailed workflows live in the Business AI layer; clicking any of them opens its business module.
+function businessModuleBuilding(name,x,z,department,requiredIQ=0,color=0x6f9fbe,accent=0x315c7b){
+  const b=building({
+    name,
+    x,z,
+    w:16,d:14,h:16,
+    footprint:2,
+    color,accent,
+    description:department+' business module. Business IQ '+requiredIQ+' is recommended before advanced AI behavior unlocks.'
+  });
+  b.userData.businessModule=true;
+  b.userData.department=department;
+  b.userData.requiredIQ=requiredIQ;
+  return b;
+}
+
+// The Transit District doubles as the larger business-services district.
+// Core tools remain usable from the AI HQ at the beginning; these physical offices become part of the city as it grows.
+const businessDistrictBuildings = [
+  businessModuleBuilding('Sales Office',-80,transitZ(-248),'Sales',0,0x4f8fd0,0x285b85),
+  businessModuleBuilding('CRM Center',-40,transitZ(-248),'Customer',6,0x5aa8a0,0x2d6f69),
+  businessModuleBuilding('Bank',0,transitZ(-248),'Finance',0,0x5a91b4,0x284f6a),
+  businessModuleBuilding('Invoice Center',120,transitZ(-248),'Accounting',8,0x6e9fc7,0x335e80),
+  businessModuleBuilding('Warehouse',160,transitZ(-248),'Production',10,0xa98b68,0x6d5238),
+
+  businessModuleBuilding('Production Facility',-80,transitZ(-284),'Production',12,0x8798a7,0x4c5a65),
+  businessModuleBuilding('Shipping & Logistics',-40,transitZ(-284),'Operations',14,0x4b8f9f,0x2d5e6a),
+  businessModuleBuilding('Marketplace',0,transitZ(-284),'Sales',9,0xd39b55,0x7b5930),
+  businessModuleBuilding('E-Commerce Center',120,transitZ(-284),'Sales',15,0x7a77bd,0x47447d),
+  businessModuleBuilding('Analytics Tower',160,transitZ(-284),'Research',18,0x5a9cc5,0x274f74),
+
+  businessModuleBuilding('HR Office',-80,transitZ(-360),'Operations',20,0xb77d87,0x74434d),
+  businessModuleBuilding('Training Center',-40,transitZ(-360),'Research',12,0xc78e5c,0x7e5435),
+  businessModuleBuilding('Research Lab',0,transitZ(-360),'Research',10,0x6f9db0,0x365b69),
+  businessModuleBuilding('Legal Office',120,transitZ(-360),'Operations',22,0x8d86a8,0x534e6c),
+  businessModuleBuilding('Document Center',160,transitZ(-360),'Operations',8,0x7d9bb3,0x465e73),
+
+  businessModuleBuilding('Operations Center',-80,transitZ(-396),'Operations',0,0x4f8d93,0x2d5b61),
+  businessModuleBuilding('Customer Support',-40,transitZ(-396),'Customer',14,0x6aa4b5,0x365e6b),
+  businessModuleBuilding('Maintenance Garage',0,transitZ(-396),'Operations',18,0x8f8c79,0x5b594c),
+  businessModuleBuilding('Fleet Garage',120,transitZ(-396),'Operations',20,0x647d8d,0x394d59),
+  businessModuleBuilding('Real Estate Office',160,transitZ(-396),'Finance',24,0xa08371,0x644f43),
+
+  businessModuleBuilding('Tax Office',-80,transitZ(-432),'Accounting',18,0x748faf,0x425a72),
+  businessModuleBuilding('Finance & Lending',-40,transitZ(-432),'Finance',22,0x5f89ad,0x34566f),
+  businessModuleBuilding('IT Center',0,transitZ(-432),'Technology',16,0x6577a9,0x38456e),
+  businessModuleBuilding('Automation Lab',120,transitZ(-432),'Technology',30,0x7566ad,0x453879),
+  businessModuleBuilding('Development Office',160,transitZ(-432),'Research',26,0x789874,0x465d43),
+
+  businessModuleBuilding('Restaurant',-20,transitZ(-468),'Operations',10,0xc58659,0x74472f),
+  businessModuleBuilding('Clinic',55,transitZ(-468),'Operations',20,0xe1e5e8,0x5e8395)
+];
+destinations.push(...businessDistrictBuildings);
+
 const airportBuilding = createAirportTerminal(303,-24);
 airportBuilding.traverse(o=>{ if(o.material && o.material.color) o.material.color.multiplyScalar(.72); });
 
@@ -3421,6 +3477,8 @@ renderer.domElement.addEventListener('pointerup',e=>{
     infoTitle.textContent=obj.userData.name;
     infoText.textContent=obj.userData.description || 'Business World location.';
     infoCard.classList.add('show');
+    // Business buildings also open their real business-tool panel.
+    if(window.BusinessAI?.openBuilding) window.BusinessAI.openBuilding(obj.userData.name);
   }
 });
 document.getElementById('closeInfo').onclick=()=>infoCard.classList.remove('show');
@@ -3452,6 +3510,45 @@ document.getElementById('timeBtn').onclick=e=>{
   const modes=['AUTO','DAY','DUSK','NIGHT'];
   timeMode=modes[(modes.indexOf(timeMode)+1)%modes.length];
   e.currentTarget.textContent='◐ '+(timeMode[0]+timeMode.slice(1).toLowerCase());
+};
+
+// Public bridge used by the Business AI layer.
+// It keeps the AI/business systems separate from Three.js rendering while still allowing
+// tasks to send autonomous workers to the correct physical office in the city.
+window.BusinessWorldGameAPI = {
+  getBuildingNames(){
+    return clickable.map(o=>o.userData?.name).filter(Boolean);
+  },
+  focusBuilding(name){
+    const target=clickable.find(o=>o.userData?.name===name);
+    if(!target) return false;
+    const world=new THREE.Vector3();
+    target.getWorldPosition(world);
+    cameraTween(
+      new THREE.Vector3(world.x+58,Math.max(58,world.y+48),world.z+68),
+      new THREE.Vector3(world.x,Math.max(3,world.y+5),world.z)
+    );
+    return true;
+  },
+  sendAgent(agentName,buildingName){
+    const w=workers.find(item=>item.name===agentName);
+    const target=clickable.find(o=>o.userData?.name===buildingName);
+    if(!w||!target) return false;
+    const world=new THREE.Vector3();
+    target.getWorldPosition(world);
+    const sx=w.obj.position.x, sz=w.obj.position.z;
+    // The worker visibly travels to the department, pauses around the lot, then returns.
+    w.route=[
+      [sx,sz],
+      [world.x,world.z+10],
+      [world.x+4,world.z+5],
+      [world.x,world.z+10],
+      [sx,sz]
+    ];
+    w.t=0;
+    w.speed=Math.max(w.speed||4,5.2);
+    return true;
+  }
 };
 
 const clock=new THREE.Clock();
