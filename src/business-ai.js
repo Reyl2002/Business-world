@@ -12,7 +12,7 @@ const BW_WORKER_DEFAULTS = {
 };
 
 const BW_BUILDINGS = {
-  "BW Headquarters":{module:"HQ / AI Command Center",department:"Operations",unlock:0,why:"Company profile, Business IQ, goals, AI suggestions, learned patterns and team coordination."},
+  "BW Headquarters":{module:"HQ / Agent Command Center",department:"Operations",unlock:0,why:"Company profile, Business IQ, goals, agent suggestions, learned patterns and team coordination."},
   "Marketing Studio":{module:"Marketing",department:"Marketing",unlock:0,why:"Creates campaigns, captions, content plans, promotions and learns the player's brand voice."},
   "Sales Office":{module:"Sales",department:"Sales",unlock:0,why:"Leads, quotes, follow-ups, deal stages, customer pricing and selling patterns."},
   "CRM Center":{module:"CRM / Customer Center",department:"Customer",unlock:6,why:"Keeps customer history, preferences, purchase patterns and follow-up opportunities together."},
@@ -82,7 +82,7 @@ const BW_INDUSTRY_TEMPLATES = {
     metrics:["New leads","Conversion rate","Renewals","Policy mix"],
     inventory:"documents, lead records and compliance items",
     suggestions:[
-      "Track lead source and conversion so the AI can learn where your best clients come from.",
+      "Track lead source and conversion so your agents can learn where your best clients come from.",
       "Watch renewal dates and suggest outreach before clients lapse.",
       "Learn which products are usually cross-sold together."
     ]
@@ -185,7 +185,7 @@ function bwStage(iq){
   if(iq<=20) return "Learning You";
   if(iq<=40) return "Familiar";
   if(iq<=60) return "Personalized Assistant";
-  if(iq<=80) return "Strategic AI Team";
+  if(iq<=80) return "Strategic Agent Team";
   return "Deep Business Understanding";
 }
 
@@ -225,7 +225,7 @@ function bwShowToast(opts){
   clearTimeout(bwToastTimer);
   el.className="bw-progress-toast"+(opts.major?" major":"");
   el.innerHTML=
-    '<div class="eyebrow">'+(opts.eyebrow||"AI LEARNING UPDATE")+'</div>'+
+    '<div class="eyebrow">'+(opts.eyebrow||"AGENT LEARNING UPDATE")+'</div>'+
     '<h3>'+opts.title+'</h3>'+
     '<p>'+opts.detail+'</p>'+
     (opts.gain?'<span class="gain">'+opts.gain+'</span>':"")+
@@ -258,7 +258,7 @@ function bwContradictPattern(id){
   p.confidence=bwClamp((p.confidence||0)-25,0,100);
   p.updated=bwNow();
   bwPushFeed("PATTERN CONFIDENCE REDUCED",p.name+" is being relearned because your recent behavior changed.","pattern",{patternId:p.id});
-  bwShowToast({title:"RELEARNING "+p.name.toUpperCase(),detail:"Your recent behavior changed, so the old pattern is being weakened.",gain:"Confidence "+p.confidence+"%",reason:"The AI should follow your current behavior, not an outdated habit."});
+  bwShowToast({title:"RELEARNING "+p.name.toUpperCase(),detail:"Your recent behavior changed, so the old pattern is being weakened.",gain:"Confidence "+p.confidence+"%",reason:"Your agents should follow your current behavior, not an outdated habit."});
   bwRecalculateIQ();
 }
 
@@ -310,12 +310,12 @@ function bwRecalculateIQ(){
     const milestone=Math.floor(next/10)*10;
     const major=milestone>Math.floor(old/10)*10;
     bwPushFeed(major?"BUSINESS IQ MILESTONE REACHED":"BUSINESS IQ IMPROVED",
-      "Your AI team understands more about how this business operates. "+old+" → "+next+".",
+      "Your agents understand more about how this business operates. "+old+" → "+next+".",
       major?"milestone":"iq",{from:old,to:next});
     bwShowToast({
       eyebrow:major?"COMPANY INTELLIGENCE MILESTONE":"COMPANY-WIDE LEARNING",
       title:major?"BUSINESS IQ "+next:"BUSINESS IQ IMPROVED",
-      detail:"Your AI team understands more about your business and can personalize suggestions more accurately.",
+      detail:"Your agents understand more about your business and can personalize suggestions more accurately.",
       gain:old+" → "+next,
       reason:"Improved patterns, confidence and department coverage.",
       major
@@ -379,7 +379,7 @@ function bwModuleTasks(name){
     "Invoice Center":["Review unpaid invoices","Learn deposit pattern","Prepare payment reminder"],
     "Bank":["Review free cash","Review bills","Check goal progress"]
   };
-  return tasks[name]||["Ask this department for a suggestion","Teach the AI a preference","Review what this department knows"];
+  return tasks[name]||["Ask this department for a suggestion","Teach your agents a preference","Review what this department knows"];
 }
 
 function bwTaskLearning(name,task){
@@ -407,7 +407,7 @@ function bwOpenBuilding(name){
   panel.innerHTML=
     '<div class="bw-ai-header"><div><div class="bw-ai-kicker">'+cfg.department.toUpperCase()+' DEPARTMENT</div><h2>'+cfg.module+'</h2><p>'+cfg.why+'</p></div><button class="bw-ai-close" id="bwCloseBuilding">×</button></div>'+
     '<div class="bw-detail-box">'+(context||"This module shares knowledge with the rest of the company as Business IQ grows.")+'</div>'+
-    (locked?'<div class="bw-detail-box"><b>Locked until Business IQ '+cfg.unlock+'.</b> Keep teaching the AI and expanding department coverage.</div>':
+    (locked?'<div class="bw-detail-box"><b>Locked until Business IQ '+cfg.unlock+'.</b> Keep teaching your agents and expanding department coverage.</div>':
       '<div class="bw-ai-actions">'+tasks.map(t=>'<button class="bw-ai-btn bw-task-btn" data-task="'+t.replace(/"/g,"&quot;")+'">'+t+'</button>').join("")+'</div>')+
     '<div class="bw-detail-box"><b>Department understanding:</b> '+Math.round(bwState.departmentScores[cfg.department]||5)+'%<br><b>Business IQ:</b> '+bwState.businessIQ+' · '+bwStage(bwState.businessIQ)+'</div>';
   panel.classList.add("show");
@@ -427,7 +427,7 @@ function bwOpenWorker(name){
   const panel=document.getElementById("bwWorkerPanel");
   const relevant=bwState.patterns.filter(p=>p.department===worker.department).slice(0,8);
   panel.innerHTML=
-    '<div class="bw-ai-header"><div><div class="bw-ai-kicker">'+worker.department.toUpperCase()+' AI WORKER</div><h2>'+name+'</h2><p>'+worker.role+'</p></div><button class="bw-ai-close" id="bwCloseWorker">×</button></div>'+
+    '<div class="bw-ai-header"><div><div class="bw-ai-kicker">'+worker.department.toUpperCase()+' AGENT</div><h2>'+name+'</h2><p>'+worker.role+'</p></div><button class="bw-ai-close" id="bwCloseWorker">×</button></div>'+
     '<div class="bw-detail-box"><b>Level '+worker.level+'</b> · '+worker.xp+' XP toward the next knowledge level<br><b>Understanding:</b> '+worker.understanding+'%</div>'+
     '<div class="bw-xpbar"><i style="width:'+bwLevelProgress(worker)+'%"></i></div>'+
     '<h3 style="margin:14px 0 6px">Learned patterns</h3>'+
@@ -450,26 +450,26 @@ function bwRenderCommandCenter(){
   const p=bwState.profile, suggestions=bwState.suggestions.length?bwState.suggestions:bwGenerateSuggestions();
   const learned=bwState.patterns.slice().sort((a,b)=>(b.confidence||0)-(a.confidence||0)).slice(0,6);
   root.innerHTML=
-    '<div class="bw-ai-header"><div><div class="bw-ai-kicker">HQ / AI COMMAND CENTER</div><h2>'+(p.businessName||"Your Business")+'</h2><p>Your city learns how this company works. Knowledge XP grows worker expertise; Business IQ measures company-wide understanding.</p></div><button class="bw-ai-close" id="bwCloseCommand">×</button></div>'+
+    '<div class="bw-ai-header"><div><div class="bw-ai-kicker">HQ / AGENT COMMAND CENTER</div><h2>'+(p.businessName||"Your Business")+'</h2><p>Your city learns how this company works. Knowledge XP grows worker expertise; Business IQ measures company-wide understanding.</p></div><button class="bw-ai-close" id="bwCloseCommand">×</button></div>'+
     '<div class="bw-iq-hero"><div class="bw-iq-ring"><div><strong>'+bwState.businessIQ+'</strong><span>BUSINESS IQ / 100</span><small>'+bwStage(bwState.businessIQ)+'</small></div></div>'+
-    '<div class="bw-ai-summary"><article><span>Industry</span><strong>'+p.primaryIndustry+'</strong></article><article><span>Model</span><strong>'+p.model+'</strong></article><article><span>Main goal</span><strong>'+(p.goal||"Learning")+'</strong></article><article><span>Patterns</span><strong>'+bwState.patterns.length+'</strong></article><article><span>AI workers</span><strong>'+Object.keys(bwState.workers).length+'</strong></article><article><span>Coverage</span><strong>'+Object.values(bwState.departmentScores).filter(v=>v>=15).length+'/'+BW_DEPARTMENTS.length+'</strong></article></div></div>'+
+    '<div class="bw-ai-summary"><article><span>Industry</span><strong>'+p.primaryIndustry+'</strong></article><article><span>Model</span><strong>'+p.model+'</strong></article><article><span>Main goal</span><strong>'+(p.goal||"Learning")+'</strong></article><article><span>Patterns</span><strong>'+bwState.patterns.length+'</strong></article><article><span>Agents</span><strong>'+Object.keys(bwState.workers).length+'</strong></article><article><span>Coverage</span><strong>'+Object.values(bwState.departmentScores).filter(v=>v>=15).length+'/'+BW_DEPARTMENTS.length+'</strong></article></div></div>'+
     '<div class="bw-ai-grid">'+
-      '<section class="bw-ai-card"><h3>AI team</h3>'+Object.entries(bwState.workers).map(([name,w])=>
+      '<section class="bw-ai-card"><h3>Agent team</h3>'+Object.entries(bwState.workers).map(([name,w])=>
         '<div class="bw-agent-row"><div class="bw-agent-avatar">'+name.charAt(0)+'</div><div><b>'+name+' · Level '+w.level+'</b><small>'+w.role+' · '+w.understanding+'% understanding</small><div class="bw-xpbar"><i style="width:'+bwLevelProgress(w)+'%"></i></div></div><button class="bw-agent-open" data-worker="'+name+'">View</button></div>'
       ).join("")+'</section>'+
-      '<section class="bw-ai-card"><h3>AI suggestions</h3>'+suggestions.map(s=>'<div class="bw-suggestion">'+s+'</div>').join("")+'<div class="bw-ai-actions"><button class="bw-ai-btn secondary" id="bwRefreshSuggestions">Refresh suggestions</button></div></section>'+
-      '<section class="bw-ai-card"><h3>Strongest learned patterns</h3>'+(learned.length?learned.map(p=>'<div class="bw-pattern"><div><b>'+p.name+'</b><small>'+p.department+' · '+p.source+'</small></div><span class="bw-confidence">'+Math.round(p.confidence)+'%</span></div>').join(""):'<div class="bw-detail-box">No confirmed patterns yet. Use the business tools and correct the AI so it can learn.</div>')+'</section>'+
-      '<section class="bw-ai-card"><h3>AI Progress feed</h3><div class="bw-feed">'+(bwState.feed.length?bwState.feed.slice(0,12).map(item=>'<div class="bw-feed-item" data-feed="'+item.id+'"><b>'+item.title+'</b><span>'+item.detail+'</span></div>').join(""):'<div class="bw-detail-box">Learning updates will appear here.</div>')+'</div></section>'+
+      '<section class="bw-ai-card"><h3>Agent suggestions</h3>'+suggestions.map(s=>'<div class="bw-suggestion">'+s+'</div>').join("")+'<div class="bw-ai-actions"><button class="bw-ai-btn secondary" id="bwRefreshSuggestions">Refresh suggestions</button></div></section>'+
+      '<section class="bw-ai-card"><h3>Strongest learned patterns</h3>'+(learned.length?learned.map(p=>'<div class="bw-pattern"><div><b>'+p.name+'</b><small>'+p.department+' · '+p.source+'</small></div><span class="bw-confidence">'+Math.round(p.confidence)+'%</span></div>').join(""):'<div class="bw-detail-box">No confirmed patterns yet. Use the business tools and correct your agents so they can learn.</div>')+'</section>'+
+      '<section class="bw-ai-card"><h3>Agent Progress feed</h3><div class="bw-feed">'+(bwState.feed.length?bwState.feed.slice(0,12).map(item=>'<div class="bw-feed-item" data-feed="'+item.id+'"><b>'+item.title+'</b><span>'+item.detail+'</span></div>').join(""):'<div class="bw-detail-box">Learning updates will appear here.</div>')+'</div></section>'+
     '</div>'+
     '<section class="bw-ai-card" style="margin-top:12px"><h3>Business modules</h3><div class="bw-building-list">'+Object.entries(BW_BUILDINGS).filter(([name])=>!["Apartments","Cafe","Business Growth Monument"].includes(name)).map(([name,cfg])=>'<button class="bw-building-chip '+((bwState.businessIQ||0)<cfg.unlock?"locked":"")+'" data-building="'+name+'">'+name+(((bwState.businessIQ||0)<cfg.unlock)?' · IQ '+cfg.unlock:'')+'</button>').join("")+'</div></section>'+
-    '<section class="bw-ai-card bw-reset"><h3>Business profile</h3><div class="bw-profile-grid"><div><b>Customers:</b> '+(p.customers||"Learning")+'</div><div><b>Offering:</b> '+p.offering+'</div><div><b>Employees:</b> '+p.employees+'</div><div><b>Inventory:</b> '+p.inventory+'</div><div><b>Acquisition:</b> '+(p.acquisition||"Learning")+'</div><div><b>Expenses:</b> '+(p.expenses||"Learning")+'</div></div><div class="bw-ai-actions"><button class="bw-ai-btn secondary" id="bwRetrain">Update business profile</button><button class="bw-ai-btn secondary" id="bwResetLearning">Reset AI learning</button></div></section>';
+    '<section class="bw-ai-card bw-reset"><h3>Business profile</h3><div class="bw-profile-grid"><div><b>Customers:</b> '+(p.customers||"Learning")+'</div><div><b>Offering:</b> '+p.offering+'</div><div><b>Employees:</b> '+p.employees+'</div><div><b>Inventory:</b> '+p.inventory+'</div><div><b>Acquisition:</b> '+(p.acquisition||"Learning")+'</div><div><b>Expenses:</b> '+(p.expenses||"Learning")+'</div></div><div class="bw-ai-actions"><button class="bw-ai-btn secondary" id="bwRetrain">Update business profile</button><button class="bw-ai-btn secondary" id="bwResetLearning">Reset agent learning</button></div></section>';
   document.getElementById("bwCloseCommand").onclick=()=>root.classList.remove("show");
   root.querySelectorAll("[data-worker]").forEach(b=>b.onclick=()=>bwOpenWorker(b.dataset.worker));
   root.querySelectorAll("[data-building]").forEach(b=>b.onclick=()=>bwOpenBuilding(b.dataset.building));
   root.querySelectorAll("[data-feed]").forEach(b=>b.onclick=()=>bwOpenFeedDetail(b.dataset.feed));
   document.getElementById("bwRefreshSuggestions").onclick=()=>{
     bwGenerateSuggestions();
-    bwAwardXP("Research",8,"BETTER AT BUSINESS SUGGESTIONS","The AI refreshed its recommendations using your current business profile.","HQ suggestion review");
+    bwAwardXP("Research",8,"BETTER AT BUSINESS SUGGESTIONS","Your agents refreshed their recommendations using your current business profile.","HQ suggestion review");
   };
   document.getElementById("bwRetrain").onclick=()=>bwStartOnboarding(true);
   document.getElementById("bwResetLearning").onclick=()=>{
@@ -491,8 +491,8 @@ function bwOpenFeedDetail(id){
   if(!item) return;
   const panel=document.getElementById("bwWorkerPanel");
   panel.innerHTML=
-    '<div class="bw-ai-header"><div><div class="bw-ai-kicker">AI PROGRESS DETAIL</div><h2>'+item.title+'</h2><p>'+item.detail+'</p></div><button class="bw-ai-close" id="bwCloseWorker">×</button></div>'+
-    '<div class="bw-detail-box"><b>Why it changed:</b> '+(item.meta.reason||"The AI learned from player behavior, corrections, approvals or connected business activity.")+'<br><b>Department:</b> '+(item.meta.department||"Company-wide")+'<br><b>Worker:</b> '+(item.meta.worker||"AI team")+'<br><b>Effect:</b> Future suggestions in this area can use the new knowledge with its current confidence.</div>';
+    '<div class="bw-ai-header"><div><div class="bw-ai-kicker">AGENT PROGRESS DETAIL</div><h2>'+item.title+'</h2><p>'+item.detail+'</p></div><button class="bw-ai-close" id="bwCloseWorker">×</button></div>'+
+    '<div class="bw-detail-box"><b>Why it changed:</b> '+(item.meta.reason||"Your agents learned from player behavior, corrections, approvals or connected business activity.")+'<br><b>Department:</b> '+(item.meta.department||"Company-wide")+'<br><b>Worker:</b> '+(item.meta.worker||"Agent team")+'<br><b>Effect:</b> Future suggestions in this area can use the new knowledge with its current confidence.</div>';
   panel.classList.add("show");
   document.getElementById("bwCloseWorker").onclick=()=>panel.classList.remove("show");
 }
@@ -515,12 +515,12 @@ function bwOpenCommandCenter(){
 function bwOnboardingMarkup(step,editing){
   const p=bwState.profile;
   if(step===0){
-    return '<div class="bw-onboarding-step"><h2>'+(editing?"Update Your Business Profile":"Welcome to Business World")+'</h2><p>Your AI team will learn what kind of company you run, then adapt its suggestions, buildings and learning around your business. You can change this later.</p><div class="bw-form-grid"><label>Business name<input id="bwOBName" value="'+(p.businessName||"").replace(/"/g,"&quot;")+'" placeholder="Your company"></label><label>Primary industry<select id="bwOBIndustry">'+Object.keys(BW_INDUSTRY_TEMPLATES).map(x=>'<option '+(p.primaryIndustry===x?"selected":"")+'>'+x+'</option>').join("")+'</select></label><label>Secondary category<input id="bwOBSecondary" value="'+(p.secondaryCategories||"").replace(/"/g,"&quot;")+'" placeholder="Optional"></label><label>What do you sell?<select id="bwOBOffering"><option '+(p.offering==="Products"?"selected":"")+'>Products</option><option '+(p.offering==="Services"?"selected":"")+'>Services</option><option '+(p.offering==="Both"?"selected":"")+'>Both</option></select></label></div></div>';
+    return '<div class="bw-onboarding-step"><h2>'+(editing?"Update Your Business Profile":"Welcome to Business World")+'</h2><p>Your agents will learn what kind of company you run, then adapt their suggestions, buildings and learning around your business. You can change this later.</p><div class="bw-form-grid"><label>Business name<input id="bwOBName" value="'+(p.businessName||"").replace(/"/g,"&quot;")+'" placeholder="Your company"></label><label>Primary industry<select id="bwOBIndustry">'+Object.keys(BW_INDUSTRY_TEMPLATES).map(x=>'<option '+(p.primaryIndustry===x?"selected":"")+'>'+x+'</option>').join("")+'</select></label><label>Secondary category<input id="bwOBSecondary" value="'+(p.secondaryCategories||"").replace(/"/g,"&quot;")+'" placeholder="Optional"></label><label>What do you sell?<select id="bwOBOffering"><option '+(p.offering==="Products"?"selected":"")+'>Products</option><option '+(p.offering==="Services"?"selected":"")+'>Services</option><option '+(p.offering==="Both"?"selected":"")+'>Both</option></select></label></div></div>';
   }
   if(step===1){
-    return '<div class="bw-onboarding-step"><h2>How does the business operate?</h2><p>This helps the AI decide which workflows and buildings matter most.</p><div class="bw-form-grid"><label>Customer model<select id="bwOBModel"><option '+(p.model==="B2B"?"selected":"")+'>B2B</option><option '+(p.model==="B2C"?"selected":"")+'>B2C</option><option '+(p.model==="Both"?"selected":"")+'>Both</option></select></label><label>Team size<select id="bwOBEmployees"><option '+(p.employees==="Just me"?"selected":"")+'>Just me</option><option '+(p.employees==="2–5"?"selected":"")+'>2–5</option><option '+(p.employees==="6–20"?"selected":"")+'>6–20</option><option '+(p.employees==="21+"?"selected":"")+'>21+</option></select></label><label>Do you carry inventory?<select id="bwOBInventory"><option '+(p.inventory==="No"?"selected":"")+'>No</option><option '+(p.inventory==="Yes"?"selected":"")+'>Yes</option><option '+(p.inventory==="Sometimes"?"selected":"")+'>Sometimes</option></select></label><label>Typical customers<input id="bwOBCustomers" value="'+(p.customers||"").replace(/"/g,"&quot;")+'" placeholder="Local businesses, consumers, contractors..."></label></div></div>';
+    return '<div class="bw-onboarding-step"><h2>How does the business operate?</h2><p>This helps your agents decide which workflows and buildings matter most.</p><div class="bw-form-grid"><label>Customer model<select id="bwOBModel"><option '+(p.model==="B2B"?"selected":"")+'>B2B</option><option '+(p.model==="B2C"?"selected":"")+'>B2C</option><option '+(p.model==="Both"?"selected":"")+'>Both</option></select></label><label>Team size<select id="bwOBEmployees"><option '+(p.employees==="Just me"?"selected":"")+'>Just me</option><option '+(p.employees==="2–5"?"selected":"")+'>2–5</option><option '+(p.employees==="6–20"?"selected":"")+'>6–20</option><option '+(p.employees==="21+"?"selected":"")+'>21+</option></select></label><label>Do you carry inventory?<select id="bwOBInventory"><option '+(p.inventory==="No"?"selected":"")+'>No</option><option '+(p.inventory==="Yes"?"selected":"")+'>Yes</option><option '+(p.inventory==="Sometimes"?"selected":"")+'>Sometimes</option></select></label><label>Typical customers<input id="bwOBCustomers" value="'+(p.customers||"").replace(/"/g,"&quot;")+'" placeholder="Local businesses, consumers, contractors..."></label></div></div>';
   }
-  return '<div class="bw-onboarding-step"><h2>What should your AI focus on?</h2><p>You do not need perfect answers. The AI will keep learning as you use the city.</p><div class="bw-form-grid"><label>How customers find you<textarea id="bwOBAcquisition" placeholder="Referrals, Instagram, walk-ins, ads...">'+(p.acquisition||"")+'</textarea></label><label>Main expenses<textarea id="bwOBExpenses" placeholder="Labor, inventory, rent, ads...">'+(p.expenses||"")+'</textarea></label><label style="grid-column:1/-1">Main business goal<textarea id="bwOBGoal" placeholder="Increase profit, get more customers, organize operations...">'+(p.goal||"")+'</textarea></label></div></div>';
+  return '<div class="bw-onboarding-step"><h2>What should your agents focus on?</h2><p>You do not need perfect answers. Your agents will keep learning as you use the city.</p><div class="bw-form-grid"><label>How customers find you<textarea id="bwOBAcquisition" placeholder="Referrals, Instagram, walk-ins, ads...">'+(p.acquisition||"")+'</textarea></label><label>Main expenses<textarea id="bwOBExpenses" placeholder="Labor, inventory, rent, ads...">'+(p.expenses||"")+'</textarea></label><label style="grid-column:1/-1">Main business goal<textarea id="bwOBGoal" placeholder="Increase profit, get more customers, organize operations...">'+(p.goal||"")+'</textarea></label></div></div>';
 }
 
 let bwOnboardingStep=0;
@@ -555,7 +555,7 @@ function bwRenderOnboarding(){
     '<div class="bw-onboarding-progress"><i style="width:'+((bwOnboardingStep+1)/3*100)+'%"></i></div>'+
     '<div class="bw-onboarding-nav">'+
       '<button class="bw-ai-btn secondary" id="bwOBBack" '+(bwOnboardingStep===0?'disabled':'')+'>Back</button>'+
-      '<button class="bw-ai-btn" id="bwOBNext">'+(bwOnboardingStep===2?"Build My AI Team":"Continue")+'</button>'+
+      '<button class="bw-ai-btn" id="bwOBNext">'+(bwOnboardingStep===2?"Build My Agent Team":"Continue")+'</button>'+
     '</div>';
   document.getElementById("bwOBBack").onclick=()=>{
     bwCaptureOnboarding();
@@ -577,10 +577,10 @@ function bwRenderOnboarding(){
     el.hidden=true;
     bwRenderAll();
     if(wasNew){
-      bwPushFeed("BUSINESS PROFILE CREATED",bwState.profile.primaryIndustry+" profile created. Your AI is ready to help while it learns.","profile",{});
-      bwShowToast({eyebrow:"YOUR BUSINESS IS READY",title:"BUSINESS IQ "+bwState.businessIQ,detail:"Your AI already has ideas for "+bwState.profile.businessName+" and will become more personalized as you teach it.",gain:bwStage(bwState.businessIQ),reason:"Three starting suggestions are ready in HQ.",major:true});
+      bwPushFeed("BUSINESS PROFILE CREATED",bwState.profile.primaryIndustry+" profile created. Your agents are ready to help while they learn.","profile",{});
+      bwShowToast({eyebrow:"YOUR BUSINESS IS READY",title:"BUSINESS IQ "+bwState.businessIQ,detail:"Your agents already have ideas for "+bwState.profile.businessName+" and will become more personalized as you teach it.",gain:bwStage(bwState.businessIQ),reason:"Three starting suggestions are ready in HQ.",major:true});
     }else{
-      bwPushFeed("BUSINESS PROFILE UPDATED","The AI updated its understanding of your company category, model and goals.","profile",{});
+      bwPushFeed("BUSINESS PROFILE UPDATED","Your agents updated their understanding of your company category, model and goals.","profile",{});
     }
     bwOpenCommandCenter();
   };
@@ -672,9 +672,9 @@ function bwRenderBank(){
   if(strategies){
     const arr=[];
     if(businessProfit<0) arr.push("<b>Business cash flow:</b> Current entered expenses are above entered revenue. Review the largest recurring costs first.");
-    else if(bwState.bank.businessRevenue>0) arr.push("<b>Margin:</b> Entered business margin is "+margin.toFixed(1)+"%. The AI can learn which products or jobs create the strongest margin.");
+    else if(bwState.bank.businessRevenue>0) arr.push("<b>Margin:</b> Entered business margin is "+margin.toFixed(1)+"%. Your agents can learn which products or jobs create the strongest margin.");
     if(free<0) arr.push("<b>Personal free cash:</b> Monthly obligations are above entered personal income.");
-    if(bwState.goals.length) arr.push("<b>Goals:</b> Keep contributions visible here so the AI can compare goal speed with available cash.");
+    if(bwState.goals.length) arr.push("<b>Goals:</b> Keep contributions visible here so your agents can compare goal speed with available cash.");
     if(!arr.length) arr.push("<b>Start here:</b> Add monthly business numbers, bills and at least one goal so Finance can learn your normal cash-flow pattern.");
     strategies.innerHTML=arr.map(x=>'<div class="bank-strategy">'+x+'</div>').join("");
   }
@@ -690,7 +690,7 @@ function bwCreateUi(){
   const root=document.createElement("div");
   root.id="bwAiRoot";
   root.innerHTML=
-    '<button class="bw-ai-fab" id="bwAiFab" type="button">AI HQ<small id="bwFabIq"></small></button>'+
+    '<button class="bw-ai-fab" id="bwAiFab" type="button">Agent HQ<small id="bwFabIq"></small></button>'+
     '<section class="bw-ai-panel" id="bwCommandCenter"></section>'+
     '<section class="bw-building-panel" id="bwBuildingPanel"></section>'+
     '<section class="bw-worker-panel" id="bwWorkerPanel"></section>'+
